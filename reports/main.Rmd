@@ -1,0 +1,83 @@
+---
+title: "Main"
+author: "pss"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: html_document
+params:
+  data_dir: data
+  expt: CFSgonogo
+  cutoff: 1
+  exclude: !r c(NaN)
+  low_name: !r c(28, 30, 45, 54)
+---
+
+```{r setup, include=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = FALSE, root.dir = devtools::package_file(), message = FALSE, warning = FALSE, fig.width = 14, fig.asp = 1, cache = FALSE, cache.path = paste0(file.path(devtools::package_file(), "output", "cache", params$model, params$flag, params$participant), .Platform$file.sep), fig.path = paste0(file.path(devtools::package_file(), "output", "figures", params$model, params$flag, params$participant), .Platform$file.sep) )
+
+library(tidyverse)
+library(magrittr)
+library(stringdist)
+library(Hmisc)
+library(modelr)
+library(lme4)
+
+targets <- readr::read_csv(file.path(devtools::package_file(), 'data', 'objectNames.csv'))
+
+
+cbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+Conditions = c('Not Studied','CFS, Image', 'Binocular, Image')
+
+colmap <- c('Not Studied'=cbPalette[7]
+            ,'Word'=cbPalette[2]
+            ,'CFS'=cbPalette[3]
+            ,'Binocular'=cbPalette[4])
+
+old_theme <- theme_set(theme_classic(base_size = 12)) +
+  theme_update(
+    axis.ticks = element_blank()
+    , axis.line = element_line(size=1)
+    , plot.margin=margin(rep(0,4))
+  )
+
+```
+
+
+```{r loadData, message=FALSE}
+
+d <- readr::read_csv(file.path(devtools::package_file(), 'data', 'data.csv')) %>%
+  group_by(subject) %>%
+  nest() %>%
+  mutate(data = map(data, . %>% mutate(test_in_study = match(item_test, item)))) %>%
+  mutate(data = map(data, . %>% mutate(Condition = tType_study[test_in_study]))) %>%
+  mutate(data = map(data, . %>% mutate(pas_1 = pas_1[test_in_study]))) %>%
+  mutate(data = map(data, . %>% mutate(pas_2 = pas_2[test_in_study]))) %>%
+  unnest() %>%
+  mutate(Condition = factor(Condition, levels = c("Not Studied","CFS","Binocular"))) %>%
+  select(-item, -tType_study, -test_in_study) %>%
+  mutate(noise_correct = if_else((gonogo_answer=='go' & response_noise=='Return') |
+                                   (gonogo_answer=='nogo' & response_noise!='Return'), 1, 0)) %>%
+  mutate(subject=factor(subject)) %>%
+  mutate(targets = out[item_test]) %>%
+  mutate(firstTarget=sapply(X=targets, FUN=function(x) extract2(x,1))) %>%
+  mutate(dl = Map(function(x,y) stringdist(x, y, method="dl"), targets, response_cue)) %>%
+  mutate(minDist = sapply(X=dl, FUN=function(x) min(x, na.rm=TRUE))) %>%
+  mutate(cue_correct = if_else(minDist < params$cutoff, 1, 0)) %>%
+  mutate(pas_1 = as.numeric(substring(pas_1,1,1))) %>%
+  mutate(pas_1 = if_else(is.na(pas_1),0,pas_1)) %>%
+  mutate(pas_1 = factor(pas_1)) %>%
+  mutate(pas_2 = as.numeric(substring(pas_2,1,1))) %>%
+  mutate(pas_2 = if_else(is.na(pas_2),0,pas_2)) %>%
+  mutate(pas_2 = factor(pas_2)) %>%
+  mutate(id = 1:n()) %>%
+  mutate(cue_correct_fct = factor(cue_correct))
+
+  
+```
+
+
+
+```{r}
+
+```
+
