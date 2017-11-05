@@ -19,10 +19,9 @@ library(magrittr)
 library(stringdist)
 library(Hmisc)
 library(modelr)
-library(lme4)
+library(brms)
 
-targets <- readr::read_csv(file.path(devtools::package_file(), 'data', 'objectNames.csv'))
-
+targets <- readr::read_csv(file.path(devtools::package_file(), 'data', 'objectNames.csv'), col_names = FALSE)
 
 cbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
 
@@ -46,21 +45,12 @@ old_theme <- theme_set(theme_classic(base_size = 12)) +
 ```{r loadData, message=FALSE}
 
 d <- readr::read_csv(file.path(devtools::package_file(), 'data', 'data.csv')) %>%
-  group_by(subject) %>%
-  nest() %>%
-  mutate(data = map(data, . %>% mutate(test_in_study = match(item_test, item)))) %>%
-  mutate(data = map(data, . %>% mutate(Condition = tType_study[test_in_study]))) %>%
-  mutate(data = map(data, . %>% mutate(pas_1 = pas_1[test_in_study]))) %>%
-  mutate(data = map(data, . %>% mutate(pas_2 = pas_2[test_in_study]))) %>%
-  unnest() %>%
-  mutate(Condition = factor(Condition, levels = c("Not Studied","CFS","Binocular"))) %>%
-  select(-item, -tType_study, -test_in_study) %>%
-  mutate(noise_correct = if_else((gonogo_answer=='go' & response_noise=='Return') |
-                                   (gonogo_answer=='nogo' & response_noise!='Return'), 1, 0)) %>%
+  mutate(condition = plyr::mapvalues(condition, from = 1:4, to = c("Not Studied", "Word", "CFS", "Binocular"))) %>%
+  mutate(condition = factor(condition, levels = c("Not Studied","Word", "CFS","Binocular"))) %>%
   mutate(subject=factor(subject)) %>%
-  mutate(targets = out[item_test]) %>%
+  mutate(targets = map(object, ~targets[.x,])) %>%
   mutate(firstTarget=sapply(X=targets, FUN=function(x) extract2(x,1))) %>%
-  mutate(dl = Map(function(x,y) stringdist(x, y, method="dl"), targets, response_cue)) %>%
+  mutate(dl = map2(targets, responses, ~stringdist(.x, .y, method="dl"))) %>%
   mutate(minDist = sapply(X=dl, FUN=function(x) min(x, na.rm=TRUE))) %>%
   mutate(cue_correct = if_else(minDist < params$cutoff, 1, 0)) %>%
   mutate(pas_1 = as.numeric(substring(pas_1,1,1))) %>%

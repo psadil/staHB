@@ -1,0 +1,187 @@
+---
+title: "Main"
+author: "pss"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: html_document
+params:
+  data_dir: data
+  expt: CFSgonogo
+  model: "brms"
+  flag: "dev"
+  n_groups: 6
+  n_trials_per_cond: 500
+  chains: 2
+---
+
+```{r setup, include=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = FALSE, root.dir = devtools::package_file(), message = FALSE, warning = FALSE, fig.width = 7, fig.asp = 1, cache = FALSE, cache.path = paste0(file.path(devtools::package_file(), "output", "cache", params$model, params$flag, params$participant), .Platform$file.sep), fig.path = paste0(file.path(devtools::package_file(), "output", "figures", params$model, params$flag), .Platform$file.sep) )
+
+library(tidyverse)
+library(magrittr)
+library(stringdist)
+library(Hmisc)
+library(modelr)
+library(brms)
+options(mc.cores = params$chains)
+
+cbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+Conditions = c('Not Studied', "Word", 'CFS, Image', 'Binocular, Image')
+
+colmap <- c('Not Studied'=cbPalette[7]
+            ,'Word'=cbPalette[2]
+            ,'CFS, Image'=cbPalette[3]
+            ,'Binocular, Image'=cbPalette[4])
+
+old_theme <- theme_set(theme_classic(base_size = 12)) +
+  theme_update(
+    axis.ticks = element_blank()
+    , axis.line = element_line(size=1)
+    , plot.margin=margin(rep(0,4))
+  )
+
+```
+
+
+```{r create_data}
+mu_x <- c(-2,-1,1,2)
+mu_y <- c(-2,-1,1,2)
+d_Nmon <- crossing(factor_x = factor(1:4, levels = c(1,2,3,4), ordered = TRUE),
+              factor_y = factor(1:4, levels = c(1,3,2,4), ordered = TRUE),
+              trial = 1:params$n_trials_per_cond) %>%
+  mutate(x_y = map2(factor_x, factor_y, ~ cbind(mu_x[.x],mu_y[.y]) + mvtnorm::rmvnorm(1, mean = rep(0,2)))) %>%
+  mutate(evidence_x = map_dbl(x_y, ~purrr::pluck(.x, 1)),
+         evidence_y = map_dbl(x_y, ~purrr::pluck(.x, 2))
+         ) %>%
+  select(-x_y) %>%
+  filter(factor_x == factor_y) %>%
+  mutate(Condition = factor_x)
+
+
+d_mon <- crossing(factor_x = factor(1:4, levels = c(1,2,3,4), ordered = TRUE),
+              factor_y = factor(1:4, levels = c(1,2,3,4), ordered = TRUE),
+              trial = 1:params$n_trials_per_cond) %>%
+  mutate(x_y = map2(factor_x, factor_y, ~ cbind(mu_x[.x],mu_y[.y]) + mvtnorm::rmvnorm(1, mean = rep(0,2)))) %>%
+  mutate(evidence_x = map_dbl(x_y, ~purrr::pluck(.x, 1)),
+         evidence_y = map_dbl(x_y, ~purrr::pluck(.x, 2))
+         ) %>%
+  select(-x_y) %>%
+  filter(factor_x == factor_y) %>%
+  mutate(Condition = factor_x)
+  
+
+```
+
+```{r, plot_data}
+
+d_Nmon %>%
+  ggplot(aes(x = evidence_x, y = evidence_y, fill = factor_x:factor_y)) +
+  stat_ellipse(type = "norm", geom = "polygon") +
+  coord_cartesian()
+
+d_mon %>%
+  ggplot(aes(x = evidence_x, y = evidence_y, fill = factor_x:factor_y)) +
+  stat_ellipse(type = "norm", geom = "polygon") +
+  coord_cartesian()
+
+```
+
+
+
+```{r}
+
+form <- brms::bf(cbind(evidence_x, evidence_y) ~ mo(Condition))
+
+mon_to_Nmon <- brms::brm(form,
+                         data = d_Nmon,
+                         chains = params$chains)
+Nmon_to_Nmon <- update(mon_to_Nmon, 
+                       formula. = ~ . -mo(Condition) + mo(factor_x) + mo(factor_y), 
+                       newdata = d_Nmon)
+
+Nmon_to_mon <- update(nmon_to_nmon, newdata = d_mon)
+mon_to_mon <- update(mon_to_nmon, formula. = ~ . - Condition + mo(Condition))
+
+
+```
+
+
+```{r waic1}
+brms::WAIC(Nmon_to_Nmon, mon_to_Nmon)
+```
+
+
+```{r, waic2}
+brms::WAIC(nmon_to_mon, mon_to_mon)
+```
+
+
+```{r stan_fun}
+
+binormal_cdf <- function(z1, z2, rho){
+  mvtnorm::pmvnorm(mean = c(z1,z2), corr = rho)
+}
+
+biprobit_lpdf <- function(Y, mu1, mu2, rho){
+    q1 = 2*Y[1] - 1
+    q2 = 2*Y[2] - 1
+
+    w1 = q1*mu1;
+    w2 = q2*mu2;
+    
+    rho1 = q1*q2*rho;
+    log(binormal_cdf(w1, w2, rho1));
+}
+
+stan_funs < - "real binormal_cdf(real z1, real z2, real rho) {
+    if (z1 != 0 || z2 != 0) {
+      real denom = fabs(rho) < 1.0 ? sqrt((1 + rho) * (1 - rho)) : not_a_number();
+      real a1 = (z2 / z1 - rho) / denom;
+      real a2 = (z1 / z2 - rho) / denom;
+      real product = z1 * z2;
+      real delta = product < 0 || (product == 0 && (z1 + z2) < 0);
+      return 0.5 * (Phi(z1) + Phi(z2) - delta) - owens_t(z1, a1) - owens_t(z2, a2);
+    }
+    return 0.25 + asin(rho) / (2 * pi());
+  }
+  real biprobit_lpdf(row_vector Y, real mu1, real mu2, real rho) {
+    real q1;
+    real q2;
+    real w1;
+    real w2;
+    real rho1;
+
+    // from Greene's econometrics book
+    q1 = 2*Y[1] - 1.0;
+    q2 = 2*Y[2] - 1.0;
+
+    w1 = q1*mu1;
+    w2 = q2*mu2;
+
+    rho1 = q1*q2*rho;
+    return log(binormal_cdf(w1, w2, rho1));
+  }"
+
+mon_to_Nmon <- brms::brm(cbind(evidence_x, evidence_y) ~ biprobit(mo(Condition)),
+                         data = d_Nmon,
+                         chains = params$chains)
+
+```
+
+
+```{r, marginals}
+
+post <- as_tibble(as.data.frame(fit_non_mon)) %>%
+  select(-sigma_evidencex, -sigma_evidencey, -rescor__evidencex__evidencey, -lp__) %>%
+  gather(key = Condition, value = Posterior, b_evidencex_Condition.L:b_evidencey_Condition.C) %>%
+  separate(col = Condition, into = c("evidence", "Condition"), sep = ".")
+  mutate(Condition = factor(Condition, levels = c("Not Studied","CFS","Binocular")))
+
+post %>%
+  ggplot(aes(x = Condition, y = Posterior)) +
+  stat_summary(fun.data = "median_hilow") +
+  scale_y_continuous(limits = c(-.5,.5), name = "Posterior of effect on RT") +
+  geom_hline(yintercept = 0, linetype = "dashed")
+
+```
+

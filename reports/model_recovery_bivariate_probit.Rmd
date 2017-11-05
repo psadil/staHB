@@ -1,0 +1,113 @@
+---
+title: 'Model Recovery: Bivariate Probit'
+author: "pss"
+date: "November 5, 2017"
+output: html_document
+params:
+  data_dir: data
+  expt: CFSgonogo
+  model: "brms"
+  flag: "dev"
+  n_condition: 4
+  n_trials_per_cond: 100
+  n_subject: 10
+  subject_scale: 0.5
+  subject_mu: 0
+  item_scale: 0.5
+  item_mu: 0
+  subject_rho: 0
+  item_rho: 0
+  condition_scale: 1
+  condition_rho: 0
+  condition_mu: !r c(-2,-1,1,2)
+  chains: 2
+  iter: 1000
+  warmup: 1000
+  compile: 0
+---
+
+```{r setup, include=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = FALSE, root.dir = devtools::package_file(), message = FALSE, warning = FALSE, fig.width = 7, fig.asp = 1, cache = FALSE, cache.path = paste0(file.path(devtools::package_file(), "output", "cache", params$model, params$flag, params$participant), .Platform$file.sep), fig.path = paste0(file.path(devtools::package_file(), "output", "figures", params$model, params$flag), .Platform$file.sep) )
+
+if (params$compile){
+  rstan::stan_model(file.path(devtools::package_file(), "stan", "bivariate_probit_mixed.stan"),
+                               model_name = file.path(devtools::package_file(), "stan", "bivariate_probit_mixed.rds"))
+}
+
+library(tidyverse)
+library(magrittr)
+library(stringdist)
+library(Hmisc)
+library(modelr)
+library(rstan)
+options(mc.cores = params$chains)
+
+condition_stds <- c(params$condition_scale, params$condition_scale)
+condition_Sigma <- matrix(c(1, params$condition_rho, params$condition_rho, 1), 2, 2) * (condition_stds %*% t(condition_stds))
+
+item_stds <- c(params$item_scale, params$item_scale)
+item_Sigma <- matrix(c(1, params$item_rho, params$item_rho, 1), 2, 2) * (item_stds %*% t(item_stds))
+
+subject_stds <- c(params$subject_scale, params$subject_scale)
+subject_Sigma <- matrix(c(1, params$subject_rho, params$subject_rho, 1), 2, 2) * (subject_stds %*% t(subject_stds))
+
+d <- crossing(condition = 1:params$n_condition,
+              item = 1:params$n_trials_per_cond,
+              subject = 1:params$n_subject) %>%
+  mutate(condition_mu = map(condition, ~ cbind(params$condition_mu[.x], params$condition_mu[.x]) + mvtnorm::rmvnorm(1, mean = rep(0,2), sigma = condition_Sigma))) %>%
+  mutate(subject_mu = map(item, ~ params$subject_mu + mvtnorm::rmvnorm(1, mean = rep(0,2), sigma = subject_Sigma))) %>%
+  mutate(item_mu = map(subject, ~ params$item_mu + mvtnorm::rmvnorm(1, mean = rep(0,2), sigma = item_Sigma))) %>%
+  mutate(Mu = pmap(list(condition_mu, subject_mu, item_mu), function(a,b,c) a + b + c)) %>%
+  mutate(evidence_x = map_dbl(Mu, ~purrr::pluck(.x, 1)),
+         evidence_y = map_dbl(Mu, ~purrr::pluck(.x, 2))
+         ) %>%
+  mutate(y_sim = map(Mu, ~if_else(.x > 0, 1, 0))) %>%
+  select(-Mu) %>%
+  mutate(y1 = map_dbl(y_sim, ~purrr::pluck(.x, 1)),
+         y2 = map_dbl(y_sim, ~purrr::pluck(.x, 2))
+  )
+
+```
+
+```{r, plot_data}
+
+d %>%
+  ggplot(aes(x = evidence_x, y = evidence_y, fill = condition)) +
+  stat_ellipse(type = "norm", geom = "polygon") +
+  coord_cartesian()
+
+```
+
+```{r stan}
+
+stan_data <- list(n = dim(d)[1],
+                  n_subject = params$n_subject,
+                  D = 2,
+                  n_item = params$n_trials_per_cond,
+                  n_condition = params$n_condition,
+                  X = modelr::model_matrix(d, ~ factor(condition)),
+                  subject = d$subject,
+                  item = d$item,
+                  condition = d %>% use_series(condition),
+                  y = cbind(d$y1, d$y2),
+                  priors = c(2, 2, 4, 2, 2, 2),
+                  idn = d %>% count(condition) %>% use_series(n),
+                  id1 = which(d$condition == 1, arr.ind = TRUE),
+                  id2 = which(d$condition == 2, arr.ind = TRUE),
+                  id3 = which(d$condition == 3, arr.ind = TRUE),
+                  id4 = which(d$condition == 4, arr.ind = TRUE),
+                  sum_y = sum(cbind(d$y1, d$y2))
+)
+
+compiled_model <- stan_model(file.path(devtools::package_file(), "stan", "bivariate_probit_mixed.stan"))
+
+estimated_model <- sampling(compiled_model, data = stan_data, 
+                            iter = params$iter,
+                            warmup = params$warmup,
+                            chains = params$chains
+                            )
+
+
+
+```
+
