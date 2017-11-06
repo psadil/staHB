@@ -1,12 +1,12 @@
 ---
 title: 'Model Recovery: Bivariate Probit'
 author: "pss"
-date: "November 5, 2017"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
 output: html_document
 params:
   data_dir: data
   expt: CFSgonogo
-  model: "bivariate_probit_mixed"
+  model: "bivariate_probit_ordered"
   flag: "dev"
   n_condition: 4
   n_trials_per_cond: 100
@@ -19,11 +19,12 @@ params:
   item_rho: 0
   condition_scale: 1
   condition_rho: 0
-  condition_mu: !r c(-2,-1,1,2)
+  condition1_mu: !r c(-2,-1,1,2)
+  condition2_mu: !r c(-2,1,-1,2)
   chains: 2
   iter: 1000
   warmup: 1000
-  compile: 1
+  compile: 0
 ---
 
 ```{r setup, include=FALSE, warning=FALSE}
@@ -55,7 +56,7 @@ subject_Sigma <- matrix(c(1, params$subject_rho, params$subject_rho, 1), 2, 2) *
 d <- crossing(condition = 1:params$n_condition,
               item = 1:params$n_trials_per_cond,
               subject = 1:params$n_subject) %>%
-  mutate(condition_mu = map(condition, ~ cbind(params$condition_mu[.x], params$condition_mu[.x]) + mvtnorm::rmvnorm(1, mean = rep(0,2), sigma = condition_Sigma))) %>%
+  mutate(condition_mu = map(condition, ~ cbind(params$condition1_mu[.x], params$condition2_mu[.x]) + mvtnorm::rmvnorm(1, mean = rep(0,2), sigma = condition_Sigma))) %>%
   mutate(subject_mu = map(item, ~ params$subject_mu + mvtnorm::rmvnorm(1, mean = rep(0,2), sigma = subject_Sigma))) %>%
   mutate(item_mu = map(subject, ~ params$item_mu + mvtnorm::rmvnorm(1, mean = rep(0,2), sigma = item_Sigma))) %>%
   mutate(Mu = pmap(list(condition_mu, subject_mu, item_mu), function(a,b,c) a + b + c)) %>%
@@ -66,7 +67,8 @@ d <- crossing(condition = 1:params$n_condition,
   select(-Mu) %>%
   mutate(y1 = map_dbl(y_sim, ~purrr::pluck(.x, 1)),
          y2 = map_dbl(y_sim, ~purrr::pluck(.x, 2))
-  )
+  )%>%
+  mutate(condition2 = plyr::mapvalues(condition, from = 1:4, to = c(1,3,2,4)))
 
 ```
 
@@ -79,7 +81,7 @@ d %>%
 
 ```
 
-```{r stan}
+```{r monotonic}
 
 stan_data <- list(n = dim(d)[1],
                   n_subject = params$n_subject,
@@ -88,9 +90,10 @@ stan_data <- list(n = dim(d)[1],
                   n_condition = params$n_condition,
                   subject = d$subject,
                   item = d$item,
-                  condition = d %>% use_series(condition),
+                  condition_1 = d %>% use_series(condition),
+                  condition_2 = d %>% use_series(condition),
                   y = cbind(d$y1, d$y2),
-                  priors = c(2, 2, 4, 2, 2, 2),
+                  priors = c(5, 2, 4, 2, 1, 2),
                   idn = d %>% count(condition) %>% use_series(n),
                   id1 = which(d$condition == 1, arr.ind = TRUE),
                   id2 = which(d$condition == 2, arr.ind = TRUE),
@@ -99,14 +102,53 @@ stan_data <- list(n = dim(d)[1],
                   sum_y = sum(cbind(d$y1, d$y2))
 )
 
-estimated_model <- sampling(readRDS(file.path(devtools::package_file(), "stan", paste0(params$model, ".rds"))), 
-                            data = stan_data, 
-                            iter = params$iter,
-                            warmup = params$warmup,
-                            chains = params$chains
-                            )
+estimated_model_mon <- sampling(readr::read_rds(file.path(devtools::package_file(), "stan", paste0(params$model, ".rds"))), 
+                                data = stan_data, 
+                                iter = params$warmup + params$iter,
+                                warmup = params$warmup,
+                                chains = params$chains
+)
 
-readr::write_rds(x=estimated_model, path = file.path(devtools::package_file(), "output", "data", params$model, params$flag, "data.rds"))
+readr::write_rds(x=estimated_model_mon, path = file.path(devtools::package_file(), "output", "data", params$model, params$flag, "data_mon.rds"))
 
+```
+
+```{r, non-monotonic}
+
+stan_data <- list(n = dim(d)[1],
+                  n_subject = params$n_subject,
+                  D = 2,
+                  n_item = params$n_trials_per_cond,
+                  n_condition = params$n_condition,
+                  subject = d$subject,
+                  item = d$item,
+                  condition_1 = d %>% use_series(condition),
+                  condition_2 = d %>% use_series(condition2),
+                  y = cbind(d$y1, d$y2),
+                  priors = c(5, 2, 4, 2, 1, 2),
+                  idn = d %>% count(condition) %>% use_series(n),
+                  id1 = which(d$condition == 1, arr.ind = TRUE),
+                  id2 = which(d$condition == 2, arr.ind = TRUE),
+                  id3 = which(d$condition == 3, arr.ind = TRUE),
+                  id4 = which(d$condition == 4, arr.ind = TRUE),
+                  sum_y = sum(cbind(d$y1, d$y2))
+)
+
+estimated_model_Nmon <- sampling(readr::read_rds(file.path(devtools::package_file(), "stan", paste0(params$model, ".rds"))), 
+                                 data = stan_data, 
+                                 iter = params$warmup + params$iter,
+                                 warmup = params$warmup,
+                                 chains = params$chains
+)
+
+readr::write_rds(x=estimated_model_Nmon, path = file.path(devtools::package_file(), "output", "data", params$model, params$flag, "data_Nmon.rds"))
+
+```
+
+
+```{r}
+# mon_waic <- loo::waic(estimated_model_mon)
+# nmon_waic <- loo::waic(estimated_model_Nmon)
+# loo::compare(mon_waic, nmon_waic)
 ```
 

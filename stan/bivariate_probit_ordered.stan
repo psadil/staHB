@@ -6,8 +6,8 @@ data {
   int<lower=1> D; // number of outcomes (2)
   int<lower=1,upper=n_subject> subject[n]; // Index indicating the subject for a current trial
   int<lower=1,upper=n_item> item[n]; // Index indicating the subject for a current trial
-  int<lower=1,upper=n_condition> condition[n]; // Index indicating which questions were gotten correct
-  matrix<lower=0,upper=1>[n, n_condition] X; // design matrix
+  int<lower=1,upper=n_condition> condition_1[n];
+  int<lower=1,upper=n_condition> condition_2[n];
   int<lower = 0, upper=1> y[n, D];
   int<lower = 1> sum_y;
   vector[6] priors; // lkj + (3*mean of latent) + eta
@@ -47,7 +47,8 @@ transformed data {
   }
 }
 parameters{
-  ordered[n_condition] condition_mu[D]; // condition effects on mean of latent
+  ordered[n_condition] condition_mu_1; // condition effects on mean of latent
+  ordered[n_condition] condition_mu_2; // condition effects on mean of latent
   matrix[D, n_subject] subject_mu_raw; // Subject-level coefficients for the bivariate normal means
   matrix[D, n_item] item_mu_raw; // Subject-level coefficients for the bivariate normal means
   vector<lower=0.0>[D] subject_scale; // Variance of subject-level effects
@@ -55,7 +56,7 @@ parameters{
   cholesky_factor_corr[D] condition_L[n_condition];
   cholesky_factor_corr[D] subject_L;
   cholesky_factor_corr[D] item_L;
-  vector<lower=0>[n_condition] eta_lkj; // condition effects on mean of latent
+  vector<lower=0>[n_condition] eta_lkj;
   vector<lower=0>[N_pos] z_pos;
   vector<upper=0>[N_neg] z_neg;
 }
@@ -75,14 +76,20 @@ transformed parameters {
   subject_mu = diag_pre_multiply(subject_scale, subject_L) * subject_mu_raw;
   item_mu = diag_pre_multiply(item_scale, item_L) * item_mu_raw;
 
-  for (o in 1:n)
-    Mu[o] = condition_mu[1:D, condition[o]] + col(subject_mu, subject[o]) + col(item_mu, item[o]);
+  {
+    real condition_mu[D];
+    for (o in 1:n){
+      condition_mu = {condition_mu_1[condition_1[o]], condition_mu_2[condition_2[o]]};
+      Mu[o] = to_vector(condition_mu) + col(subject_mu, subject[o]) + col(item_mu, item[o]);
+    }
+  }
 
 }
 model {
 
   // priors
-  to_vector(condition_mu) ~ normal(0, priors[1]);
+  condition_mu_1 ~ normal(0, priors[1]);
+  condition_mu_2 ~ normal(0, priors[1]);
   eta_lkj ~ gamma(priors[2], priors[3]);
   for(k in 1:n_condition){
     condition_L[k] ~ lkj_corr_cholesky(eta_lkj[k]);
@@ -92,8 +99,8 @@ model {
   subject_L ~ lkj_corr_cholesky(priors[6]);
   item_L ~ lkj_corr_cholesky(priors[6]);
 
-  to_vector(subject_mu_raw) ~ normal(0, 1);  // implies ~ normal(0, scale_s)
-  to_vector(item_mu_raw) ~ normal(0, 1);  // implies ~ normal(0, scale_s)
+  to_vector(subject_mu_raw) ~ normal(0, 1);
+  to_vector(item_mu_raw) ~ normal(0, 1);
 
   // likelihood
   for (k in 1:n_condition){
