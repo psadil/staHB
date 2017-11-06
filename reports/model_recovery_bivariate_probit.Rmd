@@ -6,7 +6,7 @@ output: html_document
 params:
   data_dir: data
   expt: CFSgonogo
-  model: "brms"
+  model: "bivariate_probit_mixed"
   flag: "dev"
   n_condition: 4
   n_trials_per_cond: 100
@@ -23,24 +23,25 @@ params:
   chains: 2
   iter: 1000
   warmup: 1000
-  compile: 0
+  compile: 1
 ---
 
 ```{r setup, include=FALSE, warning=FALSE}
 knitr::opts_chunk$set(echo = FALSE, root.dir = devtools::package_file(), message = FALSE, warning = FALSE, fig.width = 7, fig.asp = 1, cache = FALSE, cache.path = paste0(file.path(devtools::package_file(), "output", "cache", params$model, params$flag, params$participant), .Platform$file.sep), fig.path = paste0(file.path(devtools::package_file(), "output", "figures", params$model, params$flag), .Platform$file.sep) )
 
-if (params$compile){
-  rstan::stan_model(file.path(devtools::package_file(), "stan", "bivariate_probit_mixed.stan"),
-                               model_name = file.path(devtools::package_file(), "stan", "bivariate_probit_mixed.rds"))
-}
 
 library(tidyverse)
 library(magrittr)
-library(stringdist)
-library(Hmisc)
 library(modelr)
+library(Hmisc)
 library(rstan)
 options(mc.cores = params$chains)
+rstan::rstan_options("auto_write" = TRUE)
+
+if (params$compile){
+  rstan::stan_model(file.path(devtools::package_file(), "stan", paste0(params$model, ".stan")))
+}
+
 
 condition_stds <- c(params$condition_scale, params$condition_scale)
 condition_Sigma <- matrix(c(1, params$condition_rho, params$condition_rho, 1), 2, 2) * (condition_stds %*% t(condition_stds))
@@ -72,7 +73,7 @@ d <- crossing(condition = 1:params$n_condition,
 ```{r, plot_data}
 
 d %>%
-  ggplot(aes(x = evidence_x, y = evidence_y, fill = condition)) +
+  ggplot(aes(x = evidence_x, y = evidence_y, fill = factor(condition))) +
   stat_ellipse(type = "norm", geom = "polygon") +
   coord_cartesian()
 
@@ -85,7 +86,6 @@ stan_data <- list(n = dim(d)[1],
                   D = 2,
                   n_item = params$n_trials_per_cond,
                   n_condition = params$n_condition,
-                  X = modelr::model_matrix(d, ~ factor(condition)),
                   subject = d$subject,
                   item = d$item,
                   condition = d %>% use_series(condition),
@@ -99,15 +99,14 @@ stan_data <- list(n = dim(d)[1],
                   sum_y = sum(cbind(d$y1, d$y2))
 )
 
-compiled_model <- stan_model(file.path(devtools::package_file(), "stan", "bivariate_probit_mixed.stan"))
-
-estimated_model <- sampling(compiled_model, data = stan_data, 
+estimated_model <- sampling(readRDS(file.path(devtools::package_file(), "stan", paste0(params$model, ".rds"))), 
+                            data = stan_data, 
                             iter = params$iter,
                             warmup = params$warmup,
                             chains = params$chains
                             )
 
-
+readr::write_rds(x=estimated_model, path = file.path(devtools::package_file(), "output", "data", params$model, params$flag, "data.rds"))
 
 ```
 

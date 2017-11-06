@@ -7,7 +7,6 @@ data {
   int<lower=1,upper=n_subject> subject[n]; // Index indicating the subject for a current trial
   int<lower=1,upper=n_item> item[n]; // Index indicating the subject for a current trial
   int<lower=1,upper=n_condition> condition[n]; // Index indicating which questions were gotten correct
-  matrix<lower=0,upper=1>[n, n_condition] X; // design matrix
   int<lower = 0, upper=1> y[n, D];
   int<lower = 1> sum_y;
   vector[6] priors; // lkj + (3*mean of latent) + eta
