@@ -1,31 +1,21 @@
 functions {
-    real binormal_cdf(real z1, real z2, real rho) {
-    if (z1 != 0 || z2 != 0) {
-      real denom = fabs(rho) < 1.0 ? sqrt((1 + rho) * (1 - rho)) : not_a_number();
-      real a1 = (z2 / z1 - rho) / denom;
-      real a2 = (z1 / z2 - rho) / denom;
-      real product = z1 * z2;
-      real delta = product < 0 || (product == 0 && (z1 + z2) < 0);
-      return 0.5 * (Phi(z1) + Phi(z2) - delta) - owens_t(z1, a1) - owens_t(z2, a2);
+    real binormal_cdf(vector z, real rho) {
+    if (z[1] != 0 || z[2] != 0) {
+      real denom = fabs(rho) <= 1.0 ? sqrt((1 + rho) * (1 - rho)) : not_a_number();
+      real a1 = (z[2] / z[1] - rho) / denom;
+      real a2 = (z[1] / z[2] - rho) / denom;
+      real product = z[1] * z[2];
+      real delta = product < 0 || (product == 0 && (z[1] + z[2]) < 0);
+      return 0.5 * (Phi(z[1]) + Phi(z[2]) - delta) - owens_t(z[1], a1) - owens_t(z[2], a2);
     }
     return 0.25 + asin(rho) / (2 * pi());
   }
-  real biprobit_lpdf(row_vector Y, real mu1, real mu2, real rho) {
-    real q1;
-    real q2;
-    real w1;
-    real w2;
-    real rho1;
+  real biprobit_lpdf(vector Y, vector mu, real rho) {
+    vector[2] q = 2.0 * Y - 1.0; // from Greene's econometrics book
+    vector[2] w = q .* mu;
+    real rho1 = q[1] * q[2] * rho;
 
-    // from Greene's econometrics book
-    q1 = 2*Y[1] - 1.0;
-    q2 = 2*Y[2] - 1.0;
-
-    w1 = q1*mu1;
-    w2 = q2*mu2;
-
-    rho1 = q1*q2*rho;
-    return log(binormal_cdf(w1, w2, rho1));
+    return log(binormal_cdf(w, rho1));
   }
 }
 data {
@@ -41,7 +31,7 @@ data {
   int<lower=1,upper=n_condition> condition[n]; // joint condition
   int<lower = 0, upper=1> y[n, D];
   int<lower = 1> sum_y;
-  vector[6] priors; // lkj + (3*mean of latent) + eta
+  vector[6] priors;
   int idn[n_condition];
   int id1[idn[1]];
   int id2[idn[2]];
@@ -148,25 +138,25 @@ model {
 
 }
 generated quantities {
-  vector[n_condition] condition_rho; // correlation to assemble
-  real subject_rho; // correlation to assemble
-  real item_rho; // correlation to assemble
+  vector<lower = -1, upper = 1>[n_condition] condition_rho; // correlation to assemble
+  real<lower = -1, upper = 1> subject_rho; // correlation to assemble
+  real<lower = -1, upper = 1> item_rho; // correlation to assemble
   vector[n] log_lik; // log likelihood on each trial
+	corr_matrix[D] Omega; // entirely temporary, for indexing
 
   {
-    matrix[D, D] Sigma;
     for (k in 1:n_condition){
-      Sigma = multiply_lower_tri_self_transpose(condition_L[k]);
-      condition_rho[k] = Sigma[1,2];
+      Omega = multiply_lower_tri_self_transpose(condition_L[k]);
+      condition_rho[k] = Omega[1,2];
     }
-    Sigma = multiply_lower_tri_self_transpose(subject_L);
-    subject_rho = Sigma[1,2];
-    Sigma = multiply_lower_tri_self_transpose(item_L);
-    item_rho = Sigma[1,2];
+    Omega = multiply_lower_tri_self_transpose(subject_L);
+    subject_rho = Omega[1,2];
+    Omega = multiply_lower_tri_self_transpose(item_L);
+    item_rho = Omega[1,2];
   }
 
-  for (i in 1:n){
-    log_lik[i] = biprobit_lpdf(to_row_vector(y[i]) | Mu[i,1], Mu[i,2], condition_rho[condition[i]]);
+  for (o in 1:n){
+    log_lik[i] = biprobit_lpdf(to_vector(y[i]) | Mu[i], condition_rho[condition[i]]);
   }
 
 }

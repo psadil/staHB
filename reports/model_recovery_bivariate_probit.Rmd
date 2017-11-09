@@ -9,11 +9,11 @@ params:
   model: "bivariate_probit_ordered"
   flag: "dev"
   n_condition: 4
-  n_trials_per_cond: 100
+  n_trials_per_cond: 20
   n_subject: 10
-  subject_scale: 0.5
+  subject_scale: 0.2
   subject_mu: 0
-  item_scale: 0.5
+  item_scale: 0.2
   item_mu: 0
   subject_rho: 0
   item_rho: 0
@@ -21,10 +21,10 @@ params:
   condition_rho: 0
   condition1_mu: !r c(-2,-1,1,2)
   condition2_mu: !r c(-2,1,-1,2)
-  chains: 6
+  chains: 1
   iter: 500
   warmup: 500
-  compile: 0
+  compile: 1
 ---
 
 ```{r setup, include=FALSE, warning=FALSE}
@@ -77,7 +77,8 @@ d <- crossing(condition = 1:params$n_condition,
 d %>%
   ggplot(aes(x = evidence_x, y = evidence_y, fill = factor(condition))) +
   stat_ellipse(type = "norm", geom = "polygon") +
-  coord_cartesian()
+  coord_cartesian() +
+  theme(legend.position = "none")
 
 ```
 
@@ -110,7 +111,8 @@ estimated_model_mon <- sampling(readr::read_rds(file.path(devtools::package_file
                                 chains = params$chains,
                                 pars = c("z_pos", "z_neg",
                                          "condition_L", "subject_L", "item_L",
-                                         "item_mu_raw", "subject_mu_raw")
+                                         "item_mu_raw", "subject_mu_raw", 
+                                         "Omega")
                                 , include = FALSE
 )
 
@@ -130,7 +132,8 @@ estimated_model_Nmon <- sampling(readr::read_rds(file.path(devtools::package_fil
                                  chains = params$chains,
                                  pars = c("z_pos", "z_neg",
                                          "condition_L", "subject_L", "item_L",
-                                         "item_mu_raw", "subject_mu_raw")
+                                         "item_mu_raw", "subject_mu_raw", 
+                                         "Omega")
                                 , include = FALSE
 )
 
