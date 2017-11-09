@@ -166,7 +166,7 @@ generated quantities {
   }
 
   for (i in 1:n){
-    log_lik[n] = biprobit_lpdf(to_row_vector(y[n]) | Mu[n,1], Mu[n,2], condition_rho[condition[n]]);
+    log_lik[i] = biprobit_lpdf(to_row_vector(y[i]) | Mu[i,1], Mu[i,2], condition_rho[condition[i]]);
   }
 
 }
