@@ -1,3 +1,33 @@
+functions {
+    real binormal_cdf(real z1, real z2, real rho) {
+    if (z1 != 0 || z2 != 0) {
+      real denom = fabs(rho) < 1.0 ? sqrt((1 + rho) * (1 - rho)) : not_a_number();
+      real a1 = (z2 / z1 - rho) / denom;
+      real a2 = (z1 / z2 - rho) / denom;
+      real product = z1 * z2;
+      real delta = product < 0 || (product == 0 && (z1 + z2) < 0);
+      return 0.5 * (Phi(z1) + Phi(z2) - delta) - owens_t(z1, a1) - owens_t(z2, a2);
+    }
+    return 0.25 + asin(rho) / (2 * pi());
+  }
+  real biprobit_lpdf(row_vector Y, real mu1, real mu2, real rho) {
+    real q1;
+    real q2;
+    real w1;
+    real w2;
+    real rho1;
+
+    // from Greene's econometrics book
+    q1 = 2*Y[1] - 1.0;
+    q2 = 2*Y[2] - 1.0;
+
+    w1 = q1*mu1;
+    w2 = q2*mu2;
+
+    rho1 = q1*q2*rho;
+    return log(binormal_cdf(w1, w2, rho1));
+  }
+}
 data {
   int<lower=1> n_subject; // The number of subjects
   int<lower=1> n_item; // The number of items
@@ -6,8 +36,9 @@ data {
   int<lower=1> D; // number of outcomes (2)
   int<lower=1,upper=n_subject> subject[n]; // Index indicating the subject for a current trial
   int<lower=1,upper=n_item> item[n]; // Index indicating the subject for a current trial
-  int<lower=1,upper=n_condition> condition_1[n];
-  int<lower=1,upper=n_condition> condition_2[n];
+  int<lower=1,upper=n_condition> condition_1[n]; // for effect on X
+  int<lower=1,upper=n_condition> condition_2[n]; // for effect on Y
+  int<lower=1,upper=n_condition> condition[n]; // joint condition
   int<lower = 0, upper=1> y[n, D];
   int<lower = 1> sum_y;
   vector[6] priors; // lkj + (3*mean of latent) + eta
@@ -120,6 +151,7 @@ generated quantities {
   vector[n_condition] condition_rho; // correlation to assemble
   real subject_rho; // correlation to assemble
   real item_rho; // correlation to assemble
+  vector[n] log_lik; // log likelihood on each trial
 
   {
     matrix[D, D] Sigma;
@@ -131,6 +163,10 @@ generated quantities {
     subject_rho = Sigma[1,2];
     Sigma = multiply_lower_tri_self_transpose(item_L);
     item_rho = Sigma[1,2];
+  }
+
+  for (i in 1:n){
+    log_lik[n] = biprobit_lpdf(to_row_vector(y[n]) | Mu[n,1], Mu[n,2], condition_rho[condition[n]]);
   }
 
 }
