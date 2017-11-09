@@ -21,7 +21,7 @@ params:
   condition_rho: 0
   condition1_mu: !r c(-2,-1,1,2)
   condition2_mu: !r c(-2,1,-1,2)
-  chains: 2
+  chains: 6
   iter: 1000
   warmup: 1000
   compile: 0
