@@ -1,23 +1,3 @@
-functions {
-    real binormal_cdf(vector z, real rho) {
-    if (z[1] != 0 || z[2] != 0) {
-      real denom = fabs(rho) <= 1.0 ? sqrt((1 + rho) * (1 - rho)) : not_a_number();
-      real a1 = (z[2] / z[1] - rho) / denom;
-      real a2 = (z[1] / z[2] - rho) / denom;
-      real product = z[1] * z[2];
-      real delta = product < 0 || (product == 0 && (z[1] + z[2]) < 0);
-      return 0.5 * (Phi(z[1]) + Phi(z[2]) - delta) - owens_t(z[1], a1) - owens_t(z[2], a2);
-    }
-    return 0.25 + asin(rho) / (2 * pi());
-  }
-  real biprobit_lpdf(vector Y, vector mu, real rho) {
-    vector[2] q = 2.0 * Y - 1.0; // from Greene's econometrics book
-    vector[2] w = q .* mu;
-    real rho1 = q[1] * q[2] * rho;
-
-    return log(binormal_cdf(w, rho1));
-  }
-}
 data {
   int<lower=1> n_subject; // The number of subjects
   int<lower=1> n_item; // The number of items
@@ -141,8 +121,8 @@ generated quantities {
   vector<lower = -1, upper = 1>[n_condition] condition_rho; // correlation to assemble
   real<lower = -1, upper = 1> subject_rho; // correlation to assemble
   real<lower = -1, upper = 1> item_rho; // correlation to assemble
-  vector[n] log_lik; // log likelihood on each trial
 	corr_matrix[D] Omega; // entirely temporary, for indexing
+	int<lower = 0, upper=1> y_data[n, D] = y; // kludge for reconstructing appropriate type
 
   {
     for (k in 1:n_condition){
@@ -153,10 +133,6 @@ generated quantities {
     subject_rho = Omega[1,2];
     Omega = multiply_lower_tri_self_transpose(item_L);
     item_rho = Omega[1,2];
-  }
-
-  for (o in 1:n){
-    log_lik[i] = biprobit_lpdf(to_vector(y[i]) | Mu[i], condition_rho[condition[i]]);
   }
 
 }

@@ -9,7 +9,7 @@ params:
   model: "bivariate_probit_ordered"
   flag: "dev"
   n_condition: 4
-  n_trials_per_cond: 20
+  n_trials_per_cond: 100
   n_subject: 10
   subject_scale: 0.2
   subject_mu: 0
@@ -21,10 +21,10 @@ params:
   condition_rho: 0
   condition1_mu: !r c(-2,-1,1,2)
   condition2_mu: !r c(-2,1,-1,2)
-  chains: 1
+  chains: 4
   iter: 500
   warmup: 500
-  compile: 1
+  compile: 0
 ---
 
 ```{r setup, include=FALSE, warning=FALSE}
@@ -42,6 +42,16 @@ rstan::rstan_options("auto_write" = TRUE)
 if (params$compile){
   rstan::stan_model(file.path(devtools::package_file(), "stan", paste0(params$model, ".stan")))
 }
+responseType = function(x) {
+    
+    if (x[1] == 0 & x[2] == 0) out = 1
+    if (x[1] == 0 & x[2] == 1) out = 2
+    if (x[1] == 1 & x[2] == 0) out = 3
+    if (x[1] == 1 & x[2] == 1) out = 4
+    
+    return( out )
+}
+
 
 
 condition_stds <- c(params$condition_scale, params$condition_scale)
@@ -130,10 +140,9 @@ estimated_model_Nmon <- sampling(readr::read_rds(file.path(devtools::package_fil
                                  iter = params$warmup + params$iter,
                                  warmup = params$warmup,
                                  chains = params$chains,
-                                 pars = c("z_pos", "z_neg",
-                                         "condition_L", "subject_L", "item_L",
+                                 pars = c("condition_L", "subject_L", "item_L",
                                          "item_mu_raw", "subject_mu_raw", 
-                                         "Omega")
+                                         "Omega", "z")
                                 , include = FALSE
 )
 
@@ -142,7 +151,43 @@ readr::write_rds(x=estimated_model_Nmon, path = file.path(devtools::package_file
 ```
 
 
-```{r}
+```{r, waic}
+
+d2 <- d %>% mutate(id = 1:n()) %>%
+  mutate(y_type = map2(y1, y2, ~responseType(c(.x,.y)))) %>%
+  dplyr::mutate(LB1 = if_else(y_type %in% c(3,4), 0, -Inf),
+                LB2 = if_else(y_type %in% c(2,4), 0, -Inf),
+                UB1 = if_else(y_type %in% c(3,4), Inf, 0),
+                UB2 = if_else(y_type %in% c(2,4), Inf, 0)
+  ) %>%
+  select(id, condition, LB1:UB2)
+
+mon <- readr::read_rds(path = file.path(devtools::package_file(), "output", "data", params$model, params$flag, "data_mon.rds")) %>%
+  tidybayes::spread_samples(Mu[id,response], condition_rho[condition]) %>%
+  spread(response, Mu) %>%
+  rename(mu1 = `1`, mu2 = `2`) %>%
+  ungroup() %>%
+  inner_join(d2, by=c("id", "condition")) %>% # want a row for each trial, meaning need to drop repeated rhos
+  mutate(lik = pmap_dbl(list(lb1=LB1,lb2=LB2 ,
+                         ub1=UB1,ub2=UB2,
+                         m1=mu1,m2=mu2, 
+                         rho=condition_rho
+  ),
+  function(lb1,lb2,ub1,ub2, m1,m2, rho) mvtnorm::pmvnorm(lower = c(lb1,lb2),
+                                                         upper = c(ub1,ub2),
+                                                         mean = c(m1,m2),
+                                                         corr = matrix(c(1, rho, rho, 1), nrow = 2), 
+                                                         algorithm = Miwa())[1] ) 
+  ) %>%
+  mutate(log_lik = log(lik))
+
+mon_log_lik_mat <- mon %>%
+  select(.chain, .iteration, id, log_lik) %>%
+  spread(id, log_lik) %>%
+  select(-.chain) %>%
+  as.matrix()
+
+
 mon_waic <- loo::waic(estimated_model_mon)
 nmon_waic <- loo::waic(estimated_model_Nmon)
 loo::compare(mon_waic, nmon_waic)
