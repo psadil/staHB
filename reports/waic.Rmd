@@ -1,0 +1,18 @@
+---
+title: "WAIC"
+author: "pss"
+date: "November 18, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+The main goal of this post is to clarify what is meant by the WAIC. All of this information is comes from Chapter 7 of the third edition of the textbook _Bayesian Data Analysis_, by Gelman et al. (2013).
+
+## Intro
+
+
+The various information criteria that exist (e.g., DIC, AIC, BIC, WAIC), are primarily about assessing the log predictive density of a distribution $ \log p(y|\theta)$, where $y$ are potentially yet to be observed data (e.g., from a replication) and $theta$ are all of the paramters in the model. So, to compare models based on information criteria is to compare models based on how well it is expected they would predict the outcomes of a replication of the experiment being modelled. 

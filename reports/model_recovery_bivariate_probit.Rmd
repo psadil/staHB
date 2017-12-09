@@ -6,7 +6,7 @@ output: html_document
 params:
   data_dir: data
   expt: CFSgonogo
-  model: "bivariate_probit_ordered"
+  model: "bivariate_probit_mixed"
   flag: "dev"
   n_condition: 4
   n_trials_per_cond: 100
@@ -20,8 +20,8 @@ params:
   condition_scale: 1
   condition_rho: 0
   condition1_mu: !r c(-2,-1,1,2)
-  condition2_mu: !r c(-2,1,-1,2)
-  chains: 2
+  condition2_mu: !r c(-2,-1,1,2)
+  chains: 1
   iter: 1000
   warmup: 1000
   compile: 0
@@ -30,7 +30,7 @@ params:
 ```{r setup, include=FALSE, warning=FALSE}
 knitr::opts_chunk$set(echo = FALSE, root.dir = devtools::package_file(), message = FALSE, warning = FALSE, fig.width = 7, fig.asp = 1, cache = FALSE, cache.path = paste0(file.path(devtools::package_file(), "output", "cache", params$model, params$flag, params$participant), .Platform$file.sep), fig.path = paste0(file.path(devtools::package_file(), "output", "figures", params$model, params$flag), .Platform$file.sep) )
 
-
+devtools::load_all()
 library(tidyverse)
 library(magrittr)
 library(modelr)
@@ -75,33 +75,31 @@ d <- crossing(condition = 1:params$n_condition,
 ```{r, plot_data}
 
 d %>%
-  ggplot(aes(x = evidence_x, y = evidence_y, fill = factor(condition))) +
-  stat_ellipse(type = "norm", geom = "polygon") +
-  coord_cartesian()
+  ggplot(aes(x = evidence_x, y = evidence_y, color = factor(condition))) +
+  geom_point() +
+  # stat_ellipse(type = "norm", geom = "polygon") +
+  coord_cartesian() +
+  theme(legend.position = "none")
 
 ```
 
 ```{r monotonic}
+order_X <- gen_orders(4)
+order_X <- trim_orders(order_X, degree = "max")
 
-stan_data <- list(n = dim(d)[1],
-                  n_subject = params$n_subject,
-                  D = 2,
-                  n_item = params$n_trials_per_cond,
-                  n_condition = params$n_condition,
-                  subject = d$subject,
-                  item = d$item,
-                  condition_1 = d %>% use_series(condition),
-                  condition_2 = d %>% use_series(condition),
-                  condition = d %>% use_series(condition),
-                  y = cbind(d$y1, d$y2),
-                  priors = c(5, 2, 4, 2, 1, 2),
-                  idn = d %>% count(condition) %>% use_series(n),
-                  id1 = which(d$condition == 1, arr.ind = TRUE),
-                  id2 = which(d$condition == 2, arr.ind = TRUE),
-                  id3 = which(d$condition == 3, arr.ind = TRUE),
-                  id4 = which(d$condition == 4, arr.ind = TRUE),
-                  sum_y = sum(cbind(d$y1, d$y2))
-)
+stan_data <- d %>%
+  select(condition, item, y1, y2, subject) %>%
+  mutate(condition = factor(condition),
+         item = factor(item),
+         subject = factor(subject)) %>%
+  tidybayes::compose_data() %>%
+  c(.,
+    D = 2,
+    priors = list(c(5, 2, 4, 2, 1, 2, 2)),
+    y  = list(cbind(d$y1, d$y2)),
+    n_orders = nrow(order_X),
+    order_X = list(as.matrix(order_X))
+  )
 
 estimated_model_mon <- sampling(readr::read_rds(file.path(devtools::package_file(), "stan", paste0(params$model, ".rds"))), 
                                 data = stan_data, 
