@@ -40,7 +40,7 @@ data {
   matrix<lower = 0, upper=1>[n, D] y;
   vector[7] priors;
   int n_orders;
-  int order_X[n_orders, n_condition]; // conditions permutated by appropriate order
+  int order_X[D, n_orders, n_condition]; // conditions permutated by appropriate order
 }
 parameters{
   matrix[n_condition,D] condition_mu; // condition effects on mean of latent
@@ -51,7 +51,7 @@ parameters{
   corr_matrix[D] condition_omega[n_condition];
   cholesky_factor_corr[D] subject_L;
   cholesky_factor_corr[D] item_L;
-  vector<lower=0>[n_condition] eta_lkj; // condition effects on mean of latent
+  // vector<lower=0>[n_condition] eta_lkj; // condition effects on mean of latent
   vector[n_orders] theta_raw;
 }
 transformed parameters {
@@ -60,21 +60,18 @@ transformed parameters {
   matrix[D, n_item] item_mu; // Subject-level coefficients for the bivariate nrmal means
   matrix[n, D] Mu_ordered[n_orders];
   vector[n_orders] theta_log;
+  matrix[n_condition, D] condition_mu_ordered;
 
   subject_mu = diag_pre_multiply(subject_scale, subject_L) * subject_mu_raw;
   item_mu = diag_pre_multiply(item_scale, item_L) * item_mu_raw;
 
   Mu_unordered = subject_mu[,subject] + item_mu[,item];
 
-  {
-    matrix[n_condition, D] condition_mu_ordered;
-
-    for(order in 1:n_orders){
-      for(d in 1:D){
-        condition_mu_ordered[,d] = cumulative_sum(condition_mu[order_X[order,],d]);
-      }
-      Mu_ordered[order] = Mu_unordered' + condition_mu_ordered[condition];
+  for(order in 1:n_orders){
+    for(d in 1:D){
+      condition_mu_ordered[,d] = cumulative_sum(condition_mu[order_X[d, order,],d]);
     }
+    Mu_ordered[order] = Mu_unordered' + condition_mu_ordered[condition];
   }
 
   theta_log = log_softmax(theta_raw);
@@ -85,9 +82,9 @@ model {
 
   // priors
   to_vector(condition_mu) ~ normal(0, 1);
-  eta_lkj ~ gamma(priors[2], priors[3]);
+  // eta_lkj ~ gamma(priors[2], priors[3]);
   for(k in 1:n_condition){
-    condition_omega[k] ~ lkj_corr(eta_lkj[k]);
+    condition_omega[k] ~ lkj_corr(priors[6]);
   }
   subject_scale ~ gamma(priors[4], priors[5]);
   item_scale ~ gamma(priors[4], priors[5]);
@@ -112,6 +109,7 @@ generated quantities {
   vector[n_condition] condition_rho; // correlation to assemble
   real subject_rho; // correlation to assemble
   real item_rho; // correlation to assemble
+  vector[n] log_lik;
   vector[n_orders] theta = exp(theta_log);
 
   {
@@ -125,8 +123,16 @@ generated quantities {
     item_rho = Sigma[1,2];
   }
 
-  // for (i in 1:n){
-  //   log_lik[n] = biprobit_lpdf(y[n] | Mu[n,1], Mu[n,2], condition_rho[condition[n]]);
-  // }
+
+  {
+    vector[n_orders] lps; // temporary variable to store
+    for (i in 1:n){
+      for(order in 1:n_orders){
+        lps[order] = theta_log[order] + biprobit_lpdf(row(y,i) | Mu_ordered[order,i,1], Mu_ordered[order,i,2], condition_omega[condition[i],1,2]);
+      }
+      log_lik[i] = log_sum_exp(lps);
+    }
+  }
+
 
 }

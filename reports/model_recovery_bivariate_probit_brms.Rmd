@@ -9,7 +9,7 @@ params:
   model: "bivariate_probit_mixed"
   flag: "dev"
   n_condition: 4
-  n_trials_per_cond: 50
+  n_trials_per_cond: 100
   n_subject: 10
   subject_scale: 0.5
   subject_mu: 0
@@ -19,11 +19,11 @@ params:
   item_rho: 0
   condition_scale: 1
   condition_rho: 0
-  condition1_mu: !r c(-2,-1,0,1)
-  condition2_mu: !r c(-2,0,-1,1)
+  condition1_mu: !r c(-2,-1,1,2)
+  condition2_mu: !r c(-2,-1,1,2)
   chains: 1
-  iter: 500
-  warmup: 500
+  iter: 1000
+  warmup: 1000
   compile: 0
 ---
 
@@ -36,7 +36,6 @@ library(magrittr)
 library(modelr)
 library(Hmisc)
 library(rstan)
-library(abind)
 options(mc.cores = params$chains)
 rstan::rstan_options("auto_write" = TRUE)
 
@@ -78,40 +77,28 @@ d <- crossing(condition = 1:params$n_condition,
 d %>%
   ggplot(aes(x = evidence_x, y = evidence_y, color = factor(condition))) +
   geom_point() +
-  stat_ellipse(type = "norm", geom = "polygon") +
+  # stat_ellipse(type = "norm", geom = "polygon") +
   coord_cartesian() +
   theme(legend.position = "none")
 
 ```
 
 ```{r monotonic}
-order_X <-  gen_orders(4) %>%
-  trim_orders(., degree = "max") %>%
-  abind::abind(., ., along = 3) %>%
-  aperm(., perm = c(3,1,2))
+order_X <- gen_orders(4)
+order_X <- trim_orders(order_X, degree = "max")
 
-stan_data <- d %>%
-  select(condition, item, y1, y2, subject) %>%
-  mutate(condition = factor(condition),
-         item = factor(item),
-         subject = factor(subject)) %>%
-  tidybayes::compose_data() %>%
-  c(.,
-    D = 2,
-    priors = list(c(5, 2, 4, 2, 1, 2, 2)),
-    y  = list(cbind(d$y1, d$y2)),
-    n_orders = dim(order_X)[2],
-    order_X = list(order_X)
-  )
+mix <- mixture(gaussian, nmix = nrow(order_X))
+f <- brms::mvbrmsformula(y1 ~ 1 ,
+                         mu1 ~ mo(condition) + (1|subject) + (1|item),
+                         mu2 ~ mo(condition2) + (1|subject) + (1|item),
+                         family = mix)
+
 
 estimated_model_mon <- sampling(readr::read_rds(file.path(devtools::package_file(), "stan", paste0(params$model, ".rds"))), 
                                 data = stan_data, 
                                 iter = params$warmup + params$iter,
                                 warmup = params$warmup,
                                 chains = params$chains
-                                , pars = c("theta_log", "theta_raw",
-                                           "Mu_unordered", "Mu_ordered")
-                                , include = FALSE
 )
 
 readr::write_rds(x=estimated_model_mon, path = file.path(devtools::package_file(), "output", "data", params$model, params$flag, "data_mon.rds"))
@@ -119,12 +106,26 @@ readr::write_rds(x=estimated_model_mon, path = file.path(devtools::package_file(
 ```
 
 ```{r, non-monotonic}
-stan_data$order_X <- gen_orders(4) %>%
-  trim_orders(., degree = "max") %>%
-  rbind(., .) %>%
-  abind::abind(., .[c(1,2,4,3),], along = 3) %>%
-  aperm(., perm = c(3,1,2))
-stan_data$n_orders <- dim(stan_data$order_X)[2]
+
+stan_data <- list(n = dim(d)[1],
+                  n_subject = params$n_subject,
+                  D = 2,
+                  n_item = params$n_trials_per_cond,
+                  n_condition = params$n_condition,
+                  subject = d$subject,
+                  item = d$item,
+                  condition_1 = d %>% use_series(condition),
+                  condition_2 = d %>% use_series(condition2),
+                  condition = d %>% use_series(condition),
+                  y = cbind(d$y1, d$y2),
+                  priors = c(5, 2, 4, 2, 1, 2),
+                  idn = d %>% count(condition) %>% use_series(n),
+                  id1 = which(d$condition == 1, arr.ind = TRUE),
+                  id2 = which(d$condition == 2, arr.ind = TRUE),
+                  id3 = which(d$condition == 3, arr.ind = TRUE),
+                  id4 = which(d$condition == 4, arr.ind = TRUE),
+                  sum_y = sum(cbind(d$y1, d$y2))
+)
 
 estimated_model_Nmon <- sampling(readr::read_rds(file.path(devtools::package_file(), "stan", paste0(params$model, ".rds"))), 
                                  data = stan_data, 
@@ -139,11 +140,8 @@ readr::write_rds(x=estimated_model_Nmon, path = file.path(devtools::package_file
 
 
 ```{r}
-library(loo)
-tmp_mon <- extract_log_lik(estimated_model_mon)
-tmp_Nmon <- extract_log_lik(estimated_model_Nmon)
-mon_waic <- loo::waic(tmp_mon)
-nmon_waic <- loo::waic(tmp_Nmon)
-loo::compare(mon_waic, nmon_waic)
+# mon_waic <- loo::waic(estimated_model_mon)
+# nmon_waic <- loo::waic(estimated_model_Nmon)
+# loo::compare(mon_waic, nmon_waic)
 ```
 
