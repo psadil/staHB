@@ -44,7 +44,6 @@ if (params$compile){
   rstan::stan_model(file.path(devtools::package_file(), "stan", paste0(params$model, ".stan")))
 }
 
-
 condition_stds <- c(params$condition_scale, params$condition_scale)
 condition_Sigma <- matrix(c(1, params$condition_rho, params$condition_rho, 1), 2, 2) * (condition_stds %*% t(condition_stds))
 
@@ -117,7 +116,9 @@ estimated_model_mon <- sampling(readr::read_rds(file.path(devtools::package_file
                                 , include = FALSE
 )
 
-readr::write_rds(x=estimated_model_mon, path = file.path(devtools::package_file(), "output", "data", params$model, params$flag, "data_mon.rds"))
+# mvtnorm::pmvnorm(lower = c(-Inf,-Inf), upper= c(0.317845,-0.0431095), corr = matrix(c(1,0.0914903,0.0914903,1), nrow = 2))
+
+# readr::write_rds(x=estimated_model_mon, path = file.path(devtools::package_file(), "output", "data", params$model, params$flag, "data_mon.rds"))
 
 ```
 
