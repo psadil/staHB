@@ -1,31 +1,31 @@
 functions {
-    real binormal_cdf(real z1, real z2, real rho) {
-    if (z1 != 0 || z2 != 0) {
-      real denom = fabs(rho) < 1.0 ? sqrt((1 + rho) * (1 - rho)) : not_a_number();
-      real a1 = (z2 / z1 - rho) / denom;
-      real a2 = (z1 / z2 - rho) / denom;
-      real product = z1 * z2;
-      real delta = product < 0 || (product == 0 && (z1 + z2) < 0);
-      return 0.5 * (Phi(z1) + Phi(z2) - delta) - owens_t(z1, a1) - owens_t(z2, a2);
+  row_vector binormal_cdf_vector(matrix z, vector rho) {
+    int n = num_elements(rho);
+    vector[n] denom = sqrt((1.0 + rho) .* (1.0 - rho));
+    vector[n] a1 = (col(z,2) ./ col(z,1) - rho) ./ denom;
+    vector[n] a2 = (col(z,1) ./ col(z,2) - rho) ./ denom;
+    vector[n] product = col(z,1) .* col(z,2);
+    matrix[n,2] z_probit = Phi(z);
+    real delta;
+    row_vector[n] out;
+
+    for(i in 1:n){
+      if (z[i,1] != 0 || z[i,2] != 0){
+        delta = product[i] < 0 || (product[i] == 0 && (z[i,1] + z[i,2]) < 0);
+        out[i] = 0.5 * (z_probit[i,1] + z_probit[i,2] - delta) - owens_t(z[i,1], a1[i]) - owens_t(z[i,2], a2[i]);
+      } else{
+        out[i] = 0.25 + asin(rho[i]) / (2.0 * pi());
+      }
     }
-    return 0.25 + asin(rho) / (2 * pi());
-  }
-  real biprobit_lpdf(row_vector Y, real mu1, real mu2, real rho) {
-    real q1;
-    real q2;
-    real w1;
-    real w2;
-    real rho1;
+    return out;
+}
+  row_vector biprobit_lpdf_vector(matrix Y, matrix mu, vector rho) {
+    int n = num_elements(rho);
+    matrix[n, 2] q = 2.0 * Y - 1.0;
+    matrix[n, 2] z = q .* mu;
+    vector[n] rho1 = col(q,1) .* col(q,2) .* rho;
 
-    // from Greene's econometrics book
-    q1 = 2*Y[1] - 1.0;
-    q2 = 2*Y[2] - 1.0;
-
-    w1 = q1*mu1;
-    w2 = q2*mu2;
-
-    rho1 = q1*q2*rho;
-    return log(binormal_cdf(w1, w2, rho1));
+    return log(binormal_cdf_vector(z, rho1));
   }
 }
 data {
@@ -51,7 +51,6 @@ parameters{
   corr_matrix[D] condition_omega[n_condition];
   cholesky_factor_corr[D] subject_L;
   cholesky_factor_corr[D] item_L;
-  // vector<lower=0>[n_condition] eta_lkj; // condition effects on mean of latent
   vector[n_orders] theta_raw;
 }
 transformed parameters {
@@ -78,11 +77,10 @@ transformed parameters {
 
 }
 model {
-  vector[n_orders] lps; // temporary variable to store
+  matrix[n_orders, n] lps;
 
   // priors
   to_vector(condition_mu) ~ normal(0, 1);
-  // eta_lkj ~ gamma(priors[2], priors[3]);
   for(k in 1:n_condition){
     condition_omega[k] ~ lkj_corr(priors[6]);
   }
@@ -91,17 +89,17 @@ model {
   subject_L ~ lkj_corr_cholesky(priors[6]);
   item_L ~ lkj_corr_cholesky(priors[6]);
 
-  to_vector(subject_mu_raw) ~ normal(0, 1);  // implies ~ normal(0, scale_s)
-  to_vector(item_mu_raw) ~ normal(0, 1);  // implies ~ normal(0, scale_s)
+  to_vector(subject_mu_raw) ~ normal(0, 1);  // implies ~ normal(0, subject_scale)
+  to_vector(item_mu_raw) ~ normal(0, 1);  // implies ~ normal(0, item_scale)
 
   theta_raw ~ normal(0, priors[7]);
 
   // likelihood determined by mixture of possible orders
+  for(order in 1:n_orders){
+    lps[order,] = theta_log[order] + biprobit_lpdf_vector(y, Mu_ordered[order,,1:2], to_vector(condition_omega[condition,1,2]));
+  }
   for (i in 1:n){
-    for(order in 1:n_orders){
-      lps[order] = theta_log[order] + biprobit_lpdf(row(y,i) | Mu_ordered[order,i,1], Mu_ordered[order,i,2], condition_omega[condition[i],1,2]);
-    }
-    target += log_sum_exp(lps);
+    target += log_sum_exp(col(lps,i));
   }
 
 }
@@ -123,16 +121,13 @@ generated quantities {
     item_rho = Sigma[1,2];
   }
 
-
   {
-    vector[n_orders] lps; // temporary variable to store
+    matrix[n_orders,n] lps;
+    for(order in 1:n_orders){
+      lps[order,] = theta_log[order] + biprobit_lpdf_vector(y, Mu_ordered[order,,1:2], to_vector(condition_omega[condition,1,2]));
+    }
     for (i in 1:n){
-      for(order in 1:n_orders){
-        lps[order] = theta_log[order] + biprobit_lpdf(row(y,i) | Mu_ordered[order,i,1], Mu_ordered[order,i,2], condition_omega[condition[i],1,2]);
-      }
-      log_lik[i] = log_sum_exp(lps);
+      log_lik[i] = log_sum_exp(col(lps,i));
     }
   }
-
-
 }

@@ -9,7 +9,7 @@ params:
   model: "bivariate_probit_mixed"
   flag: "dev"
   n_condition: 4
-  n_trials_per_cond: 50
+  n_trials_per_cond: 25
   n_subject: 10
   subject_scale: 0.5
   subject_mu: 0
@@ -110,7 +110,10 @@ estimated_model_mon <- sampling(readr::read_rds(file.path(devtools::package_file
                                 warmup = params$warmup,
                                 chains = params$chains
                                 , pars = c("theta_log", "theta_raw",
-                                           "Mu_unordered", "Mu_ordered")
+                                           "Mu_unordered", "Mu_ordered",
+                                           "subject_mu_raw", "item_mu_raw", "subject_mu", "item_mu",
+                                           "subject_L", "item_L",
+                                           "condition_omega")
                                 , include = FALSE
 )
 
@@ -130,7 +133,13 @@ estimated_model_Nmon <- sampling(readr::read_rds(file.path(devtools::package_fil
                                  data = stan_data, 
                                  iter = params$warmup + params$iter,
                                  warmup = params$warmup,
-                                 chains = params$chains
+                                 chains = params$chains,
+                                 pars = c("theta_log", "theta_raw",
+                                           "Mu_unordered", "Mu_ordered",
+                                           "subject_mu_raw", "item_mu_raw", "subject_mu", "item_mu",
+                                           "subject_L", "item_L",
+                                           "condition_omega"),
+                                 include = FALSE
 )
 
 readr::write_rds(x=estimated_model_Nmon, path = file.path(devtools::package_file(), "output", "data", params$model, params$flag, "data_Nmon.rds"))
