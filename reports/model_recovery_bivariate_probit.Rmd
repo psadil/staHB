@@ -6,21 +6,21 @@ output: html_document
 params:
   data_dir: data
   expt: CFSgonogo
-  model: "bivariate_probit_mixed"
-  flag: "dev"
+  model: "bivariate_probit_fixed_nc"
+  flag: "pin"
   n_condition: 4
-  n_trials_per_cond: 25
-  n_subject: 20
-  subject_scale: 0.5
-  item_scale: 0.5
+  n_trials_per_cond: 1000
+  n_subject: 1
+  subject_scale: 0.01
+  item_scale: 0.01
   subject_rho: 0
   item_rho: 0
   condition_rho: 0
-  condition1_mu: !r c(-2,-1,0,1)
-  condition2_mu: !r c(-2,0,-1,1)
+  condition1_mu: !r c(-1,-0.5,0.5,1)
+  condition2_mu: !r c(-1,0.5,-0.5,1)
   chains: 3
   iter: 500
-  warmup: 500
+  warmup: 1000
   compile: 0
 ---
 
@@ -28,7 +28,16 @@ params:
 knitr::opts_chunk$set(echo = FALSE, root.dir = devtools::package_file(), message = FALSE, warning = FALSE, fig.width = 7, fig.asp = 1, cache = FALSE, cache.path = paste0(file.path(devtools::package_file(), "output", "cache", params$model, params$flag, params$participant), .Platform$file.sep), fig.path = paste0(file.path(devtools::package_file(), "output", "figures", params$model, params$flag), .Platform$file.sep) )
 
 devtools::load_all()
-library(modelr)
+# library(modelr)
+
+dir.model <- file.path(dir.stan_samples, params$model)
+if (!dir.exists(dir.model)){
+  dir.create(dir.model)
+}
+dir.model_flag <- file.path(dir.model, params$flag)
+if (!dir.exists(dir.model_flag)){
+  dir.create(dir.model_flag)
+}
 
 options(mc.cores = params$chains)
 rstan::rstan_options("auto_write" = TRUE)
@@ -49,10 +58,10 @@ subject_Sigma <- matrix(c(1, params$subject_rho, params$subject_rho, 1), 2, 2) *
 d <- crossing(condition = 1:params$n_condition,
               item = 1:params$n_trials_per_cond,
               subject = 1:params$n_subject) %>%
-  mutate(condition_mu = map(condition, ~ cbind(params$condition1_mu[.x], params$condition2_mu[.x]) + mvtnorm::rmvnorm(1, mean = rep(0,2), sigma = condition_Sigma))) %>%
+  mutate(condition_mu = map(condition, ~cbind(params$condition1_mu[.x], params$condition2_mu[.x]))) %>%
   mutate(subject_mu = map(item, ~ mvtnorm::rmvnorm(1, mean = rep(0,2), sigma = subject_Sigma))) %>%
   mutate(item_mu = map(subject, ~ mvtnorm::rmvnorm(1, mean = rep(0,2), sigma = item_Sigma))) %>%
-  mutate(Mu = pmap(list(condition_mu, subject_mu, item_mu), function(a,b,c) a + b + c)) %>%
+  mutate(Mu = pmap(list(condition_mu, subject_mu, item_mu), function(a,b,c) mvtnorm::rmvnorm(1, mean = a + b + c, sigma = condition_Sigma) )) %>%
   mutate(evidence_x = map_dbl(Mu, ~purrr::pluck(.x, 1)),
          evidence_y = map_dbl(Mu, ~purrr::pluck(.x, 2))
          ) %>%
@@ -65,10 +74,24 @@ d <- crossing(condition = 1:params$n_condition,
 
 ```
 
+```{r}
+
+d %>%
+  group_by(condition, subject) %>%
+  summarise(ev_x = mean(evidence_x), ev_y = mean(evidence_y),
+            sd_x = sd(evidence_x), sd_y = sd(evidence_y),
+            y1 = mean(y1), y2 = mean(y2))
+
+
+
+```
+
+
+
 ```{r, plot_data}
 
 d %>%
-  ggplot(aes(x = evidence_x, y = evidence_y, fill = factor(condition))) +
+  ggplot(aes(x = evidence_x, y = evidence_y, color = factor(condition))) +
   geom_point() +
   stat_ellipse(type = "norm", geom = "polygon") +
   coord_cartesian() +
@@ -91,11 +114,15 @@ stan_data <- d %>%
   tidybayes::compose_data() %>%
   c(.,
     D = 2,
-    priors = list(c(3, 2, 4, 2, 1, 2, 2)),
+    priors = list(c(1, 2, 4, 2, 1, 2, 1)),
     y  = list(cbind(d$y1, d$y2)),
     n_orders = dim(order_X)[2],
     order_X = list(order_X)
   )
+
+condition_mu_ordered = array(rep(array(seq(-2,0,length.out = 4)),times=2), dim=c(4,2)) %>%
+  abind::abind(.,., along = 3) %>%
+  aperm(., perm = c(3,2,1))
 
 estimated_model_mon <- sampling(readr::read_rds(file.path(devtools::package_file(), "stan", paste0(params$model, ".rds"))), 
                                 data = stan_data, 
@@ -108,18 +135,48 @@ estimated_model_mon <- sampling(readr::read_rds(file.path(devtools::package_file
                                            "subject_L", "item_L",
                                            "condition_omega")
                                 , include = FALSE
-                                , init = rep(list(list(subject_mu_raw = matrix(0,2,params$n_subject)
-                                                       , item_mu_raw = matrix(0,2,params$n_trials_per_cond)
-                                                       , subject_scale = c(1,1)
-                                                       , item_scale = c(1,1)
-                                                       # , condition_omega = array(0, dim = c(4,2,2))
-                                                       , theta_raw = rep(0, times = stan_data$n_orders)
-                                                       )), times = params$chains)
+                                # , init = rep(list(list(subject_mu_raw = matrix(0,2,params$n_subject)
+                                #                        , item_mu_raw = matrix(0,2,params$n_trials_per_cond)
+                                #                        , subject_scale = c(1,1)
+                                #                        , item_scale = c(1,1)
+                                #                        # , condition_mu_ordered = condition_mu_ordered
+                                #                        # , condition_omega = array(0, dim = c(4,2,2))
+                                #                        , theta_raw = array(0, dim = stan_data$n_orders-1)
+                                #                        )), times = params$chains)
 )
 
 readr::write_rds(x=estimated_model_mon, path = file.path(devtools::package_file(), "output", "data", params$model, params$flag, "data_mon.rds"))
 
 ```
+
+
+When the true effects of condition are symmetric, all monotonic orders are equally awful. The Bayesian model must choose to fit either the first or the second question well and the other poorly. Alternatively, the model can try to fit both effects equally poorly, in which case the mixing parameter will get stuck at 0.5.
+
+This isn't ideal, but also not necessarily a problem. Basically, this implies that the 
+
+```{r}
+
+post <- tidybayes::gather_samples(estimated_model_mon,
+                                  condition_mu_ordered[order,question,condition]) %>%
+  ungroup()
+theta <- tidybayes::gather_samples(estimated_model_mon,
+                                   theta[order]) %>%
+  ungroup() %>%
+  mutate(order = factor(order))
+
+post %>%
+  mutate(condition = stan_data$order_X[question,order,condition]) %>%
+  ggplot(aes(x=condition, y = estimate)) +
+  geom_point() +
+  facet_grid(.chain~question)
+
+theta %>%
+  ggplot(aes(x=order, y=estimate)) +
+  geom_point() +
+  facet_wrap(~.chain)
+```
+
+
 
 ```{r, non-monotonic}
 stan_data$order_X <- gen_orders(4) %>%
@@ -155,4 +212,5 @@ mon_waic <- loo::waic(tmp_mon)
 nmon_waic <- loo::waic(tmp_Nmon)
 loo::compare(mon_waic, nmon_waic)
 ```
+
 
