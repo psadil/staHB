@@ -47,41 +47,39 @@ data {
   int<lower=1> D; // number of outcomes (2)
   int<lower=1,upper=n_subject> subject[n]; // Index indicating the subject for a current trial
   int<lower=1,upper=n_item> item[n]; // Index indicating the subject for a current trial
-  int<lower=1,upper=n_condition> condition[n]; // Index indicating which questions were gotten correct
+  int<lower=1,upper=n_condition> condition[n];
   matrix<lower = 0, upper=1>[n, D] y;
   vector[7] priors;
   int n_orders;
   int order_X[D, n_orders, n_condition]; // conditions permutated by appropriate order
 }
 parameters{
-  matrix[n_condition,D] condition_mu; // condition effects on mean of latent
+  ordered[n_condition] condition_mu_ordered[D]; // condition effects on mean of latent
   matrix[D, n_subject] subject_mu_raw; // Subject-level coefficients for the bivariate normal means
-  matrix[D, n_item] item_mu_raw; // Subject-level coefficients for the bivariate normal means
+  matrix[D, n_item] item_mu_raw;
   vector<lower=0.0>[D] subject_scale; // Variance of subject-level effects
-  vector<lower=0.0>[D] item_scale; // Variance of subject-level effects
+  vector<lower=0.0>[D] item_scale;
   corr_matrix[D] condition_omega[n_condition];
   cholesky_factor_corr[D] subject_L;
   cholesky_factor_corr[D] item_L;
   vector[n_orders] theta_raw;
 }
 transformed parameters {
-  matrix[D, n] Mu_unordered; // Bivariate nrmal means per trial
   matrix[D, n_subject] subject_mu; // Subject-level coefficients for the bivariate nrmal means
   matrix[D, n_item] item_mu; // Subject-level coefficients for the bivariate nrmal means
   matrix[n, D] Mu_ordered[n_orders];
   vector[n_orders] theta_log;
-  matrix[n_condition, D] condition_mu_ordered;
 
   subject_mu = diag_pre_multiply(subject_scale, subject_L) * subject_mu_raw;
   item_mu = diag_pre_multiply(item_scale, item_L) * item_mu_raw;
 
-  Mu_unordered = subject_mu[,subject] + item_mu[,item];
+  {
+    matrix[D, n] Mu_random = subject_mu[,subject] + item_mu[,item];
 
-  for(order in 1:n_orders){
-    for(d in 1:D){
-      condition_mu_ordered[,d] = cumulative_sum(condition_mu[order_X[d, order,],d]);
+    for(order in 1:n_orders){
+      Mu_ordered[order] = Mu_random' + append_col(condition_mu_ordered[1,order_X[1,order,condition]],
+        condition_mu_ordered[2,order_X[2,order,condition]]);
     }
-    Mu_ordered[order] = Mu_unordered' + condition_mu_ordered[condition];
   }
 
   theta_log = log_softmax(theta_raw);
@@ -91,7 +89,9 @@ model {
   matrix[n_orders, n] lps;
 
   // priors
-  to_vector(condition_mu) ~ normal(0, 1);
+  for(d in 1:D){
+    condition_mu_ordered[d] ~ normal(0, priors[1]);
+  }
   for(k in 1:n_condition){
     condition_omega[k] ~ lkj_corr(priors[6]);
   }

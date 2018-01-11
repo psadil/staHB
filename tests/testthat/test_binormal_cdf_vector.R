@@ -1,6 +1,5 @@
-devtools::load_all()
+
 library(rstan)
-library(mvProbit)
 
 context("Probability function testing")
 

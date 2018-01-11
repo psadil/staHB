@@ -10,18 +10,15 @@ params:
   flag: "dev"
   n_condition: 4
   n_trials_per_cond: 25
-  n_subject: 10
+  n_subject: 20
   subject_scale: 0.5
-  subject_mu: 0
   item_scale: 0.5
-  item_mu: 0
   subject_rho: 0
   item_rho: 0
-  condition_scale: 1
   condition_rho: 0
   condition1_mu: !r c(-2,-1,0,1)
   condition2_mu: !r c(-2,0,-1,1)
-  chains: 1
+  chains: 3
   iter: 500
   warmup: 500
   compile: 0
@@ -31,12 +28,8 @@ params:
 knitr::opts_chunk$set(echo = FALSE, root.dir = devtools::package_file(), message = FALSE, warning = FALSE, fig.width = 7, fig.asp = 1, cache = FALSE, cache.path = paste0(file.path(devtools::package_file(), "output", "cache", params$model, params$flag, params$participant), .Platform$file.sep), fig.path = paste0(file.path(devtools::package_file(), "output", "figures", params$model, params$flag), .Platform$file.sep) )
 
 devtools::load_all()
-library(tidyverse)
-library(magrittr)
 library(modelr)
-library(Hmisc)
-library(rstan)
-library(abind)
+
 options(mc.cores = params$chains)
 rstan::rstan_options("auto_write" = TRUE)
 
@@ -44,7 +37,7 @@ if (params$compile){
   rstan::stan_model(file.path(devtools::package_file(), "stan", paste0(params$model, ".stan")))
 }
 
-condition_stds <- c(params$condition_scale, params$condition_scale)
+condition_stds <- c(1, 1)
 condition_Sigma <- matrix(c(1, params$condition_rho, params$condition_rho, 1), 2, 2) * (condition_stds %*% t(condition_stds))
 
 item_stds <- c(params$item_scale, params$item_scale)
@@ -57,8 +50,8 @@ d <- crossing(condition = 1:params$n_condition,
               item = 1:params$n_trials_per_cond,
               subject = 1:params$n_subject) %>%
   mutate(condition_mu = map(condition, ~ cbind(params$condition1_mu[.x], params$condition2_mu[.x]) + mvtnorm::rmvnorm(1, mean = rep(0,2), sigma = condition_Sigma))) %>%
-  mutate(subject_mu = map(item, ~ params$subject_mu + mvtnorm::rmvnorm(1, mean = rep(0,2), sigma = subject_Sigma))) %>%
-  mutate(item_mu = map(subject, ~ params$item_mu + mvtnorm::rmvnorm(1, mean = rep(0,2), sigma = item_Sigma))) %>%
+  mutate(subject_mu = map(item, ~ mvtnorm::rmvnorm(1, mean = rep(0,2), sigma = subject_Sigma))) %>%
+  mutate(item_mu = map(subject, ~ mvtnorm::rmvnorm(1, mean = rep(0,2), sigma = item_Sigma))) %>%
   mutate(Mu = pmap(list(condition_mu, subject_mu, item_mu), function(a,b,c) a + b + c)) %>%
   mutate(evidence_x = map_dbl(Mu, ~purrr::pluck(.x, 1)),
          evidence_y = map_dbl(Mu, ~purrr::pluck(.x, 2))
@@ -75,10 +68,11 @@ d <- crossing(condition = 1:params$n_condition,
 ```{r, plot_data}
 
 d %>%
-  ggplot(aes(x = evidence_x, y = evidence_y, color = factor(condition))) +
+  ggplot(aes(x = evidence_x, y = evidence_y, fill = factor(condition))) +
   geom_point() +
   stat_ellipse(type = "norm", geom = "polygon") +
   coord_cartesian() +
+  coord_fixed()+
   theme(legend.position = "none")
 
 ```
@@ -97,7 +91,7 @@ stan_data <- d %>%
   tidybayes::compose_data() %>%
   c(.,
     D = 2,
-    priors = list(c(5, 2, 4, 2, 1, 2, 2)),
+    priors = list(c(3, 2, 4, 2, 1, 2, 2)),
     y  = list(cbind(d$y1, d$y2)),
     n_orders = dim(order_X)[2],
     order_X = list(order_X)
@@ -114,11 +108,16 @@ estimated_model_mon <- sampling(readr::read_rds(file.path(devtools::package_file
                                            "subject_L", "item_L",
                                            "condition_omega")
                                 , include = FALSE
+                                , init = rep(list(list(subject_mu_raw = matrix(0,2,params$n_subject)
+                                                       , item_mu_raw = matrix(0,2,params$n_trials_per_cond)
+                                                       , subject_scale = c(1,1)
+                                                       , item_scale = c(1,1)
+                                                       # , condition_omega = array(0, dim = c(4,2,2))
+                                                       , theta_raw = rep(0, times = stan_data$n_orders)
+                                                       )), times = params$chains)
 )
 
-# mvtnorm::pmvnorm(lower = c(-Inf,-Inf), upper= c(0.317845,-0.0431095), corr = matrix(c(1,0.0914903,0.0914903,1), nrow = 2))
-
-# readr::write_rds(x=estimated_model_mon, path = file.path(devtools::package_file(), "output", "data", params$model, params$flag, "data_mon.rds"))
+readr::write_rds(x=estimated_model_mon, path = file.path(devtools::package_file(), "output", "data", params$model, params$flag, "data_mon.rds"))
 
 ```
 
