@@ -1,0 +1,79 @@
+for whatever it's worth, this error message can also pop up when the dimensions of the data don't match the dimensions declared in the stan data block. In the code below, `X` is declared to have dimensions (b,a,c,d). But when 
+
+
+<a class="attachment" href="/uploads/mc_stan/original/2X/4/4ba6360c70ec820b3270ada5bd9d9ef05344bab2.stan">dim_mismatch.stan</a> (175 Bytes)
+
+    data {
+      int a;
+      int b;
+      int c;
+      int d;
+      vector[c] y;
+      matrix[c,d] X[a];
+    }
+    parameters{
+      vector[d] beta;
+    }
+    model {
+      beta ~ normal(0, 1);
+      y ~ normal(X[1]*beta, 1);
+    }
+
+
+Can be called with:
+
+<a class="attachment" href="/uploads/mc_stan/original/2X/9/9e31c91a7ddef1ec64978b03a461da05250720e4.R">dim_mismatch.R</a> (310 Bytes)
+
+    a <- 1
+    b <- 2
+    c <- 3
+    d <- 4
+
+    X <- array(0,dim=c(a,b,c,d))
+    y <- rnorm( c )
+
+    stan_data <- list(a=a,b=b,c=c,d=d,y=y,X=X)
+
+    rstan::rstan_options("auto_write" = TRUE)
+    rstan::stan_model("dim_mismatch.stan")
+
+    fit <- rstan::sampling(readr::read_rds("dim_mismatch.rds"), 
+                           data = stan_data, verbose=TRUE)
+
+resulting in:
+
+
+    CHECKING DATA AND PREPROCESSING FOR MODEL 'dim_mismatch' NOW.
+
+    COMPILING MODEL 'dim_mismatch' NOW.
+
+    STARTING SAMPLER FOR MODEL 'dim_mismatch' NOW.
+    trying deprecated constructor; please alert package maintainer
+    Error in cpp_object_initializer(.self, .refClassDef, ...) : 
+      could not find function "cpp_object_initializer"
+    failed to create the sampler; sampling not done
+
+
+output from `sessionInfo()`
+    
+    R version 3.4.3 (2017-11-30)
+    Platform: x86_64-pc-linux-gnu (64-bit)
+    Running under: Ubuntu 17.10
+
+    Matrix products: default
+    BLAS: /usr/lib/x86_64-linux-gnu/openblas/libblas.so.3
+    LAPACK: /usr/lib/x86_64-linux-gnu/libopenblasp-r0.2.20.so
+
+    locale:
+     [1] LC_CTYPE=en_US.UTF-8       LC_NUMERIC=C               LC_TIME=en_US.UTF-8        LC_COLLATE=en_US.UTF-8     LC_MONETARY=en_US.UTF-8   
+     [6] LC_MESSAGES=en_US.UTF-8    LC_PAPER=en_US.UTF-8       LC_NAME=C                  LC_ADDRESS=C               LC_TELEPHONE=C            
+    [11] LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C       
+
+    attached base packages:
+    [1] stats     graphics  grDevices utils     datasets  methods   base     
+
+     loaded via a namespace (and not attached):
+     [1] Rcpp_0.12.14       codetools_0.2-15   R6_2.2.2           grid_3.4.3         plyr_1.8.4         gtable_0.2.0       stats4_3.4.3      
+     [8] StanHeaders_2.17.1 scales_0.5.0       pillar_1.0.1       ggplot2_2.2.1      rlang_0.1.6        lazyeval_0.2.1     tools_3.4.3       
+    [15] readr_1.1.1        munsell_0.4.3      hms_0.4.0          yaml_2.1.16        rstan_2.17.2       compiler_3.4.3     pkgconfig_2.0.1   
+    [22] inline_0.3.14      colorspace_1.3-2   gridExtra_2.3      tibble_1.4.1      

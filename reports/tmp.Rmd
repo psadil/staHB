@@ -6,19 +6,19 @@ output: html_document
 params:
   data_dir: data
   expt: CFSgonogo
-  model: "bivariate_probit_fixed_onec"
-  flag: "dev"
+  model: "bivariate_probit_fixed_nc_tmp"
+  flag: "pin"
   n_condition: 4
-  n_trials_per_cond: 500
+  n_trials_per_cond: 5
   n_subject: 1
   subject_scale: 0.01
   item_scale: 0.01
   subject_rho: 0
   item_rho: 0
-  condition_rho: 0 
+  condition_rho: 0
   condition1_mu: !r c(-1,-0.5,0.5,1)
   condition2_mu: !r c(-1,0.5,-0.5,1)
-  chains: 3
+  chains: 1
   iter: 500
   warmup: 1000
   compile: 0
@@ -28,6 +28,7 @@ params:
 knitr::opts_chunk$set(echo = FALSE, root.dir = devtools::package_file(), message = FALSE, warning = FALSE, fig.width = 7, fig.asp = 1, cache = FALSE, cache.path = paste0(file.path(devtools::package_file(), "output", "cache", params$model, params$flag, params$participant), .Platform$file.sep), fig.path = paste0(file.path(devtools::package_file(), "output", "figures", params$model, params$flag), .Platform$file.sep) )
 
 devtools::load_all()
+# library(modelr)
 
 dir.model <- file.path(dir.stan_samples, params$model)
 if (!dir.exists(dir.model)){
@@ -67,8 +68,8 @@ d <- crossing(condition = 1:params$n_condition,
   mutate(y1 = map_dbl(y_sim, ~purrr::pluck(.x, 1)),
          y2 = map_dbl(y_sim, ~purrr::pluck(.x, 2))
   )%>%
-  mutate(condition2 = condition) %>%
-  mutate(condition = factor(condition, levels = c(1,2,3,4), ordered = TRUE),
+  mutate(condition2 = plyr::mapvalues(condition, from = 1:4, to = c(1,3,2,4))) %>%
+  mutate(condition = factor(condition, ordered = TRUE),
          condition2 = factor(condition2, levels = c(1,3,2,4), ordered = TRUE))
 
 ```
@@ -80,6 +81,7 @@ d %>%
   summarise(ev_x = mean(evidence_x), ev_y = mean(evidence_y),
             sd_x = sd(evidence_x), sd_y = sd(evidence_y),
             y1 = mean(y1), y2 = mean(y2))
+
 
 
 ```
@@ -98,8 +100,15 @@ d %>%
 
 ```
 
-```{r stan_data}
-X <- gen_X(d, "mon")
+```{r monotonic}
+X1 <- d %>% modelr::model_matrix(., y1 ~ condition - 1)
+X2 <- d %>% modelr::model_matrix(., y1 ~ condition2 - 1)
+
+# X <- abind::abind(as.matrix(X1),as.matrix(X2), along = 3) %>%
+#   abind::abind(.,., along = 4) %>%
+#   aperm(.,perm = c(4,3,1,2))
+X <- abind::abind(as.matrix(X1),as.matrix(X2), along = 3) %>%
+  aperm(.,perm = c(3,1,2))
 
 stan_data <- d %>%
   select(condition, item, y1, y2, subject) %>%
@@ -109,36 +118,28 @@ stan_data <- d %>%
   tidybayes::compose_data() %>%
   c(.,
     D = 2,
-    priors = list(c(1, 2, 4, 2, 1, 2, 2)),
+    priors = list(c(1, 2, 4, 2, 1, 2, 1)),
     y  = list(cbind(d$y1, d$y2)),
-    n_orders = dim(X)[1],
-    X = list(X)
+    n_orders = dim(X)[1]
   )
-
-pars <- c("theta_log", "theta_raw", "lps",
-         "Mu_unordered", "Mu_ordered",
-         "subject_mu_raw", "item_mu_raw", "subject_mu", "item_mu",
-         "subject_L", "item_L",
-         "condition_omega")
-
-
-```
-
-
-```{r monotonic}
+stan_data$X <- X
 
 estimated_model_mon <- sampling(readr::read_rds(file.path(devtools::package_file(), "stan", paste0(params$model, ".rds"))), 
                                 data = stan_data, 
                                 iter = params$warmup + params$iter,
                                 warmup = params$warmup,
                                 chains = params$chains
-                                , pars = pars
+                                , pars = c("theta_log", "theta_raw", 
+                                           "Mu_unordered", "Mu_ordered",
+                                           "subject_mu_raw", "item_mu_raw", "subject_mu", "item_mu",
+                                           "subject_L", "item_L",
+                                           "condition_omega")
                                 , include = FALSE
                                 , init_r = 0.5
                                 , verbose = TRUE
 )
 
-# readr::write_rds(x=estimated_model_mon, path = file.path(devtools::package_file(), "output", "stan_samples", params$model, params$flag, "data_mon.rds"))
+# readr::write_rds(x=estimated_model_mon, path = file.path(devtools::package_file(), "output", "data", params$model, params$flag, "data_mon.rds"))
 
 ```
 
@@ -158,35 +159,41 @@ theta <- tidybayes::gather_samples(estimated_model_mon,
   mutate(order = factor(order))
 
 post %>%
-  mutate(condition = factor(condition)) %>%
+  mutate(condition = stan_data$order_X[question,order,condition]) %>%
   ggplot(aes(x=condition, y = estimate)) +
-  geom_violin() +
-  facet_grid(order~question, labeller = "label_both")
+  geom_point() +
+  facet_grid(.chain~question)
 
 theta %>%
   ggplot(aes(x=order, y=estimate)) +
-  geom_violin() +
+  geom_point() +
   facet_wrap(~.chain)
 ```
 
 
 
 ```{r, non-monotonic}
-
-stan_data$X <- gen_X(d,"nmon")
-stan_data$n_orders <- dim(stan_data$X)[1]
+stan_data$order_X <- gen_orders(4) %>%
+  trim_orders(., degree = "max") %>%
+  rbind(., .) %>%
+  abind::abind(., .[c(1,2,4,3),], along = 3) %>%
+  aperm(., perm = c(3,1,2))
+stan_data$n_orders <- dim(stan_data$order_X)[2]
 
 estimated_model_Nmon <- sampling(readr::read_rds(file.path(devtools::package_file(), "stan", paste0(params$model, ".rds"))), 
                                  data = stan_data, 
                                  iter = params$warmup + params$iter,
                                  warmup = params$warmup,
-                                 chains = params$chains
-                                 , pars = pars
-                                 , include = FALSE
-                                 , init_r = 0.5
+                                 chains = params$chains,
+                                 pars = c("theta_log", "theta_raw",
+                                           "Mu_unordered", "Mu_ordered",
+                                           "subject_mu_raw", "item_mu_raw", "subject_mu", "item_mu",
+                                           "subject_L", "item_L",
+                                           "condition_omega"),
+                                 include = FALSE
 )
 
-readr::write_rds(x=estimated_model_Nmon, path = file.path(devtools::package_file(), "output", "stan_samples", params$model, params$flag, "data_Nmon.rds"))
+readr::write_rds(x=estimated_model_Nmon, path = file.path(devtools::package_file(), "output", "data", params$model, params$flag, "data_Nmon.rds"))
 
 ```
 
@@ -199,5 +206,4 @@ mon_waic <- loo::waic(tmp_mon)
 nmon_waic <- loo::waic(tmp_Nmon)
 loo::compare(mon_waic, nmon_waic)
 ```
-
 

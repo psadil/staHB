@@ -47,7 +47,7 @@ data {
   matrix<lower = 0, upper=1>[n, D] y;
   vector[7] priors;
   int n_orders;
-  matrix[n,n_condition] X[n_orders, D]; 
+  matrix[n,n_condition] X[n_orders, D];
 }
 parameters{
   ordered[n_condition] condition_mu_ordered[n_orders, D]; // condition effects on mean of latent
@@ -55,21 +55,17 @@ parameters{
   vector[n_orders-1] theta_raw; // first value must be pinned for identifiability
 }
 transformed parameters {
-  matrix[n, D] Mu_ordered[n_orders];
   vector[n_orders] theta_log = log_softmax(append_row(0,theta_raw));
   matrix[n_orders, n] lps;
   vector[n] log_lik;
-
-  for(order in 1:n_orders){
-    Mu_ordered[order] = append_col(X[order,1] * condition_mu_ordered[order, 1],
-      X[order,2] * condition_mu_ordered[order, 2]);
-  }
 
   // likelihood determined by mixture of possible orders
   // this would usually go in model block, but I want the log_lik for waic so
   // if put there I might need to calculate twice
   for(order in 1:n_orders){
-    lps[order,] = theta_log[order] + biprobit_lpdf_vector(y, Mu_ordered[order], condition_omega[1,2] );
+    lps[order,] = theta_log[order] + biprobit_lpdf_vector(y,
+      append_col(X[order,1] * condition_mu_ordered[order, 1], X[order,2] * condition_mu_ordered[order, 2]),
+      condition_omega[1,2] );
   }
   for (i in 1:n){
     log_lik[i] = log_sum_exp(col(lps,i));
@@ -81,7 +77,7 @@ model {
   // priors
   for(order in 1:n_orders){
     for(d in 1:D){
-      to_vector(condition_mu_ordered[order,d]) ~ normal(0, priors[1]);
+      to_vector(condition_mu_ordered[order,d]) ~ normal(0, priors[1]); // consider trying student_t(3,0,1);
     }
   }
 
@@ -93,7 +89,6 @@ model {
 
 }
 generated quantities {
-  real<lower=-1.0, upper=1.0> condition_rho = condition_omega[1,2]; // correlation to assemble
-  simplex[n_orders] theta = exp(theta_log);
-
+  real<lower=-1, upper=1> condition_rho = condition_omega[1,2]; // correlation to assemble
+  vector[n_orders] theta = exp(theta_log);
 }
