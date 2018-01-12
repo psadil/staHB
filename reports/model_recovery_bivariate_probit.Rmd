@@ -99,7 +99,6 @@ d %>%
 ```
 
 ```{r stan_data}
-X <- gen_X(d, "mon")
 
 stan_data <- d %>%
   select(condition, item, y1, y2, subject) %>%
@@ -110,9 +109,7 @@ stan_data <- d %>%
   c(.,
     D = 2,
     priors = list(c(1, 2, 4, 2, 1, 2, 2)),
-    y  = list(cbind(d$y1, d$y2)),
-    n_orders = dim(X)[1],
-    X = list(X)
+    y  = list(cbind(d$y1, d$y2))
   )
 
 pars <- c("theta_log", "theta_raw", "lps",
@@ -126,6 +123,10 @@ pars <- c("theta_log", "theta_raw", "lps",
 
 
 ```{r monotonic}
+
+stan_data$X <- gen_X(d,"mon")
+stan_data$n_orders <- dim(stan_data$X)[1]
+
 
 estimated_model_mon <- sampling(readr::read_rds(file.path(devtools::package_file(), "stan", paste0(params$model, ".rds"))), 
                                 data = stan_data, 
@@ -165,8 +166,7 @@ post %>%
 
 theta %>%
   ggplot(aes(x=order, y=estimate)) +
-  geom_violin() +
-  facet_wrap(~.chain)
+  geom_violin() 
 ```
 
 

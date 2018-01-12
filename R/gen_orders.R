@@ -24,36 +24,43 @@ trim_orders <- function(order_X, base_group=1, end_group=4, degree = "none"){
   return(out)
 }
 
+gen_X_one_order <- function(X1,X2){
+  X <- abind::abind(as.matrix(X1),as.matrix(X2), along = 3)
+  return(X)
+}
+
+
 #' @export
-gen_X <- function(d, type){
+gen_X <- function(d, type, n_conditions=4, degree="max"){
+  # this is the main function for generating order-dependent design matrices
+  # currently only works with 4 conditions and max trim
 
-  order_X <- gen_orders(4) %>%
-    trim_orders(., degree = "max")
+  order_X <- gen_orders(n_conditions) %>%
+    trim_orders(., degree = degree)
 
-  X1 <- d %>% modelr::model_matrix(., ~ condition - 1)
-  X2 <- d %>% modelr::model_matrix(., ~ condition2 - 1)
-
-  if(type=="mon"){
-    X <- gen_X_same_order(X1) %>% # dim 3 := question
-      abind::abind(., gen_X_same_order(X2), along = 4) %>% # dim 4 := order
-      aperm(.,perm = c(4,3,1,2))
-  }else if(type == "nmon"){
-    X <- gen_X_same_order(X1) %>% # dim 3 := question
-      abind::abind(., gen_X_same_order(X2), along = 4) %>% # dim 4 := order
-      abind::abind(., gen_X_mixed_order(X1,X2), along = 4) %>% # dim $ := order
-      abind::abind(., gen_X_mixed_order(X2,X1), along = 4) %>% # dim 4 := order
-      aperm(.,perm = c(4,3,1,2)) # final is (order, question, obsvervation, condition)
+  if (type=="nmon"){
+    order_X <- abind::abind(order_X, order_X, along=1) %>%
+      abind::abind(., .[c(1,2,4,3),], along=3)
+  }else if(type=="mon"){
+    order_X <- abind::abind(order_X, order_X, along=3)
   }
+
+  for(order in 1:dim(order_X)[1]){
+    X1 <- d %>%
+      mutate(condition_tmp = factor(condition, levels = order_X[order,,1], ordered = TRUE)) %>%
+      modelr::model_matrix(., ~ condition_tmp - 1)
+    X2 <- d %>%
+      mutate(condition_tmp = factor(condition, levels = order_X[order,,2], ordered = TRUE)) %>%
+      modelr::model_matrix(., ~ condition_tmp - 1)
+    if(order==1){
+      X <- gen_X_one_order(X1,X2)
+    }else{
+      X <- X %>%
+        abind::abind(.,gen_X_one_order(X1,X2), along=4)
+    }
+  }
+  X <- aperm(X, perm=c(4,3,1,2))
 
   return(X)
 }
 
-gen_X_same_order <- function(X){
-  out <- abind::abind(as.matrix(X),as.matrix(X), along = 3)
-  return(out)
-}
-
-gen_X_mixed_order <- function(X1, X2){
-  out <- abind::abind(as.matrix(X1),as.matrix(X2), along = 3)
-  return(out)
-}
