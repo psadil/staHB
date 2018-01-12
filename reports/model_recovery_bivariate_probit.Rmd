@@ -192,6 +192,28 @@ readr::write_rds(x=estimated_model_Nmon, path = file.path(devtools::package_file
 
 
 ```{r}
+
+post <- tidybayes::gather_samples(estimated_model_Nmon,
+                                  condition_mu_ordered[order,question,condition]) %>%
+  ungroup()
+theta <- tidybayes::gather_samples(estimated_model_Nmon,
+                                   theta[order]) %>%
+  ungroup() %>%
+  mutate(order = factor(order))
+
+post %>%
+  mutate(condition = factor(condition)) %>%
+  ggplot(aes(x=condition, y = estimate)) +
+  geom_violin() +
+  facet_grid(order~question, labeller = "label_both")
+
+theta %>%
+  ggplot(aes(x=order, y=estimate)) +
+  geom_violin() 
+```
+
+
+```{r}
 library(loo)
 tmp_mon <- extract_log_lik(estimated_model_mon)
 tmp_Nmon <- extract_log_lik(estimated_model_Nmon)
