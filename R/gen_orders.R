@@ -23,3 +23,22 @@ trim_orders <- function(order_X, base_group=1, end_group=4, degree = "none"){
 
   return(out)
 }
+
+#' @export
+gen_X <- function(d, type){
+
+  X1 <- d %>% modelr::model_matrix(., y1 ~ condition - 1)
+  X2 <- d %>% modelr::model_matrix(., y1 ~ condition2 - 1)
+
+  if(type=="mon"){
+    X <- abind::abind(as.matrix(X1),as.matrix(X2), along = 3) %>%
+      abind::abind(.,., along = 4) %>%
+      aperm(.,perm = c(4,3,1,2))
+  }else if(type == "nmon"){
+    X <- abind::abind(as.matrix(X1),as.matrix(X2), along = 3) %>%
+      abind::abind(.,abind::abind(as.matrix(X2),as.matrix(X1), along = 3), along = 4) %>%
+      aperm(.,perm = c(4,3,1,2))
+  }
+
+  return(X)
+}

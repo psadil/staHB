@@ -87,19 +87,16 @@ d %>%
 order_X <- gen_orders(4)
 order_X <- trim_orders(order_X, degree = "max")
 
-mix <- mixture(gaussian, nmix = nrow(order_X))
-f <- brms::mvbrmsformula(y1 ~ 1 ,
-                         mu1 ~ mo(condition) + (1|subject) + (1|item),
-                         mu2 ~ mo(condition2) + (1|subject) + (1|item),
-                         family = mix)
+mix <- mixture(gaussian, nmix = 2)
 
+bf1 <- bf(y1 ~ 1, mu1 ~ mo(condition), mu2 ~ mo(condition2), family = mix )
+bf2 <- bf(y2 ~ 1, mu1 ~ mo(condition), mu2 ~ mo(condition2), family = mix )
 
-estimated_model_mon <- sampling(readr::read_rds(file.path(devtools::package_file(), "stan", paste0(params$model, ".rds"))), 
-                                data = stan_data, 
-                                iter = params$warmup + params$iter,
-                                warmup = params$warmup,
-                                chains = params$chains
-)
+f <- brms::mvbrmsformula(bf1, bf2, rescor = FALSE)
+
+tmp <- brms::brm(formula=f, data=d, save_model = "brms.stan",
+                 chains=1,
+                 cores=1, iter = 1, warmup = 1)
 
 readr::write_rds(x=estimated_model_mon, path = file.path(devtools::package_file(), "output", "data", params$model, params$flag, "data_mon.rds"))
 

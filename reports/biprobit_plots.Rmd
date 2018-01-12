@@ -1,0 +1,49 @@
+---
+title: "Bivariate Probit Plots"
+author: "pss"
+date: "January 12, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+rstan::expose_stan_functions(file.path(devtools::package_file(), "stan", paste0("bivariate_probit_mixed", ".stan")))
+
+d <- crossing(rho = seq(0,1,length.out = 6),
+              id = 1:1000,
+              condition = c(-1,-.5,.5,1)) %>%
+  mutate(evidence = map2(condition,rho, ~mvtnorm::rmvnorm(1,mean = c(.x,.x), sigma = matrix(c(1,.y,.y,1), 2,2)))) %>%
+  mutate(condition = factor(condition)) %>%
+  mutate(evidence_x = map_dbl(evidence, ~purrr::pluck(.x, 1)),
+         evidence_y = map_dbl(evidence, ~purrr::pluck(.x, 2))
+  ) %>%
+  mutate(y_sim = map(evidence, ~if_else(.x > 0, 1, 0))) %>%
+  mutate(cdf_true = map2_dbl(evidence,  rho, ~mvtnorm::pmvnorm(upper = as.vector(.x), corr = matrix(c(1,.y,.y,1), 2,2)))) %>%
+  mutate(cdf_stan = map2_dbl(evidence,  rho, ~binormal_cdf_vector(z = .x, rho = .y)))
+
+
+
+```
+
+
+```{r}
+
+d %>%
+  ggplot(aes(x=cdf_true, y=cdf_stan)) +
+  geom_point() +
+  facet_wrap(~rho)
+
+```
+
+
+```{r fig.width = 14, fig.asp = 1}
+
+d %>% 
+  ggplot(aes(x=evidence_x, y=evidence_y, fill=cdf_true, color=condition)) +
+  geom_point(shape=21, size=3) +
+  facet_wrap(~rho) +
+  coord_fixed()
+
+```
+

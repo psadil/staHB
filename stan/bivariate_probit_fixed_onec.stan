@@ -30,11 +30,11 @@ functions {
     }
     return out;
 }
-  row_vector biprobit_lpdf_vector(matrix Y, matrix mu, vector rho) {
-    int n = num_elements(rho);
+  row_vector biprobit_lpdf_vector(matrix Y, matrix mu, real rho) {
+    int n = rows(Y);
     matrix[n, 2] q = 2.0 * Y - 1.0;
     matrix[n, 2] z = q .* mu;
-    vector[n] rho1 = col(q,1) .* col(q,2) .* rho;
+    vector[n] rho1 = col(q,1) .* col(q,2) * rho;
 
     return log(binormal_cdf_vector(z, rho1));
   }
@@ -47,23 +47,36 @@ data {
   matrix<lower = 0, upper=1>[n, D] y;
   vector[7] priors;
   int n_orders;
-  int order_X[D, n_orders, n_condition]; // conditions permutated by appropriate order
+  matrix[n,n_condition] X[n_orders, D]; 
 }
 parameters{
   ordered[n_condition] condition_mu_ordered[n_orders, D]; // condition effects on mean of latent
+  corr_matrix[D] condition_omega;
   vector[n_orders-1] theta_raw; // first value must be pinned for identifiability
 }
 transformed parameters {
   matrix[n, D] Mu_ordered[n_orders];
   vector[n_orders] theta_log = log_softmax(append_row(0,theta_raw));
+  matrix[n_orders, n] lps;
+  vector[n] log_lik;
 
   for(order in 1:n_orders){
-    Mu_ordered[order] = append_col(condition_mu_ordered[order, 1, order_X[1,order,condition]],
-      condition_mu_ordered[order, 2, order_X[2,order,condition]]);
+    Mu_ordered[order] = append_col(X[order,1] * condition_mu_ordered[order, 1],
+      X[order,2] * condition_mu_ordered[order, 2]);
   }
+
+  // likelihood determined by mixture of possible orders
+  // this would usually go in model block, but I want the log_lik for waic so
+  // if put there I might need to calculate twice
+  for(order in 1:n_orders){
+    lps[order,] = theta_log[order] + biprobit_lpdf_vector(y, Mu_ordered[order], condition_omega[1,2] );
+  }
+  for (i in 1:n){
+    log_lik[i] = log_sum_exp(col(lps,i));
+  }
+
 }
 model {
-  matrix[n_orders, n] lps;
 
   // priors
   for(order in 1:n_orders){
@@ -72,27 +85,15 @@ model {
     }
   }
 
+  condition_omega ~ lkj_corr(priors[6]);
+
   theta_raw ~ normal(0, priors[7]);
 
-  // likelihood determined by mixture of possible orders
-  for(order in 1:n_orders){
-    lps[order,] = theta_log[order] + biprobit_lpdf_vector(y, Mu_ordered[order,,1:2], rep_vector(0, n));
-  }
-  for (i in 1:n){
-    target += log_sum_exp(col(lps,i));
-  }
+  target += sum(log_lik);
 
 }
 generated quantities {
-  vector[n] log_lik;
+  real<lower=-1.0, upper=1.0> condition_rho = condition_omega[1,2]; // correlation to assemble
+  simplex[n_orders] theta = exp(theta_log);
 
-  {
-    matrix[n_orders,n] lps;
-    for(order in 1:n_orders){
-      lps[order,] = theta_log[order] + biprobit_lpdf_vector(y, Mu_ordered[order,,1:2], rep_vector(0, n));
-    }
-    for (i in 1:n){
-      log_lik[i] = log_sum_exp(col(lps,i));
-    }
-  }
 }
