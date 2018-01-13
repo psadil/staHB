@@ -6,10 +6,10 @@ output: html_document
 params:
   data_dir: data
   expt: CFSgonogo
-  model: "bivariate_probit_fixed_onec"
+  model: "bivariate_probit_fixed_onec_int"
   flag: "dev"
   n_condition: 4
-  n_trials_per_cond: 500
+  n_trials_per_cond: 2000
   n_subject: 1
   subject_scale: 0.01
   item_scale: 0.01
@@ -19,7 +19,7 @@ params:
   condition1_mu: !r c(-1,-0.5,0.5,1)
   condition2_mu: !r c(-1,0.5,-0.5,1)
   chains: 3
-  iter: 500
+  iter: 1000
   warmup: 1000
   compile: 0
 ---
@@ -66,22 +66,7 @@ d <- crossing(condition = 1:params$n_condition,
   select(-Mu) %>%
   mutate(y1 = map_dbl(y_sim, ~purrr::pluck(.x, 1)),
          y2 = map_dbl(y_sim, ~purrr::pluck(.x, 2))
-  )%>%
-  mutate(condition2 = condition) %>%
-  mutate(condition = factor(condition, levels = c(1,2,3,4), ordered = TRUE),
-         condition2 = factor(condition2, levels = c(1,3,2,4), ordered = TRUE))
-
-```
-
-```{r}
-
-d %>%
-  group_by(condition, subject) %>%
-  summarise(ev_x = mean(evidence_x), ev_y = mean(evidence_y),
-            sd_x = sd(evidence_x), sd_y = sd(evidence_y),
-            y1 = mean(y1), y2 = mean(y2))
-
-
+  ) 
 ```
 
 
@@ -111,6 +96,7 @@ stan_data <- d %>%
     priors = list(c(1, 2, 4, 2, 1, 2, 2)),
     y  = list(cbind(d$y1, d$y2))
   )
+# stan_data$beta <- 2L
 
 pars <- c("theta_log", "theta_raw", "lps",
          "Mu_unordered", "Mu_ordered",
@@ -136,10 +122,9 @@ estimated_model_mon <- sampling(readr::read_rds(file.path(devtools::package_file
                                 , pars = pars
                                 , include = FALSE
                                 , init_r = 0.5
-                                , verbose = TRUE
 )
 
-# readr::write_rds(x=estimated_model_mon, path = file.path(devtools::package_file(), "output", "stan_samples", params$model, params$flag, "data_mon.rds"))
+readr::write_rds(x=estimated_model_mon, path = file.path(devtools::package_file(), "output", "stan_samples", params$model, params$flag, "data_mon.rds"))
 
 ```
 

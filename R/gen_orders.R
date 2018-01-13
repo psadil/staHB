@@ -45,13 +45,15 @@ gen_X <- function(d, type, n_conditions=4, degree="max"){
     order_X <- abind::abind(order_X, order_X, along=3)
   }
 
+  # careful! the default coding scheme for ordered factor is polynomial contrasts!
+  # also, default coding scheme for unordered factor (contr.treatment) are not orthogonal to intercept
   for(order in 1:dim(order_X)[1]){
     X1 <- d %>%
       mutate(condition_tmp = factor(condition, levels = order_X[order,,1], ordered = TRUE)) %>%
-      modelr::model_matrix(., ~ condition_tmp - 1)
+      modelr::model_matrix(., ~ condition_tmp, contrasts = list(condition_tmp = "contr.treatment"))
     X2 <- d %>%
       mutate(condition_tmp = factor(condition, levels = order_X[order,,2], ordered = TRUE)) %>%
-      modelr::model_matrix(., ~ condition_tmp - 1)
+      modelr::model_matrix(., ~ condition_tmp, contrasts = list(condition_tmp = "contr.treatment"))
     if(order==1){
       X <- gen_X_one_order(X1,X2)
     }else{
