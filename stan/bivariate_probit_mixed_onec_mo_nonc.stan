@@ -44,6 +44,8 @@ data {
   int<lower=1> n_condition; // number of conditions (4)
   int<lower=1> n_subject; // The number of subjects
   int<lower=1,upper=n_subject> subject[n]; // Index indicating the subject for a current trial
+  int<lower=1> n_item; // The number of subjects
+  int<lower=1,upper=n_item> item[n]; // Index indicating the subject for a current trial
   int<lower=1> D; // number of outcomes (2)
   int<lower=1,upper=n_condition> condition[n];
   matrix<lower = 0, upper=1>[n, D] y;
@@ -63,6 +65,9 @@ parameters{
   vector<lower=0.0>[D] subject_scale; // Variance of subject-level effects
   matrix[n_subject, D] subject_mu_raw; // Subject-level coefficients for the bivariate normal means
   cholesky_factor_corr[D] subject_L;
+  vector<lower=0.0>[D] item_scale; // Variance of subject-level effects
+  matrix[n_item, D] item_mu_raw; // Subject-level coefficients for the bivariate normal means
+  cholesky_factor_corr[D] item_L;
 }
 transformed parameters {
   vector[n_orders] theta_log = log_softmax(append_row(0,theta_raw));
@@ -72,6 +77,7 @@ transformed parameters {
   matrix[n_condition-1, n_orders] zeta = append_row(zeroes_order, zeta_raw);
   vector[n_condition-1]  cumulative_sum_softmax_zeta[n_orders];
   matrix[n_subject, D] subject_mu = subject_mu_raw * diag_pre_multiply(subject_scale, subject_L);
+  matrix[n_item, D] item_mu = item_mu_raw * diag_pre_multiply(item_scale, item_L);
 
   // likelihood determined by mixture of possible orders
   // this would usually go in model block, but I want the log_lik for waic so
@@ -102,6 +108,9 @@ model {
   subject_scale ~ gamma(priors[4], priors[5]);
   subject_L ~ lkj_corr_cholesky(priors[6]);
   to_vector(subject_mu_raw) ~ normal(0, 1);  // implies ~ normal(0, subject_scale)
+  item_scale ~ gamma(priors[4], priors[5]);
+  item_L ~ lkj_corr_cholesky(priors[6]);
+  to_vector(item_mu_raw) ~ normal(0, 1);  // implies ~ normal(0, subject_scale)
 
   condition_omega ~ lkj_corr(priors[6]);
 
@@ -113,13 +122,15 @@ model {
 generated quantities {
   real<lower=-1, upper=1> condition_rho = condition_omega[1,2]; // correlation to assemble
   vector[n_orders] theta = exp(theta_log);
-
   real<lower=-1.0, upper=1.0> subject_rho; // correlation to assemble
+  real<lower=-1.0, upper=1.0> item_rho; // correlation to assemble
 
   {
     matrix[D, D] Sigma;
     Sigma = multiply_lower_tri_self_transpose(subject_L);
     subject_rho = Sigma[1,2];
+    Sigma = multiply_lower_tri_self_transpose(item_L);
+    item_rho = Sigma[1,2];
   }
 
 }

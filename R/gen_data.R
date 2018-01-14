@@ -1,30 +1,26 @@
 
 gen_grand_data <- function(params){
 
-  item_stds <- c(params$item_scale, params$item_scale)
-  item_Sigma <- matrix(c(1, params$item_rho, params$item_rho, 1), 2, 2) * (item_stds %*% t(item_stds))
-
-  subject_stds <- c(params$subject_scale, params$subject_scale)
-  subject_Sigma <- matrix(c(1, params$subject_rho, params$subject_rho, 1), 2, 2) * (subject_stds %*% t(subject_stds))
-
-  d <- crossing(n_item = seq(10, 50, length.out = 5)
-                , n_subject = seq(10, 50, length.out = 5)
-                , condition_rho = c(-.9, 0, .5, .9)) %>%
-    mutate(expt = 1:n()) %>%
-    group_by(expt) %>%
+  d <- crossing(n_item = params$n_item
+                , n_subject = params$n_subject
+                , condition_rho = params$condition_rho
+                , type = factor(params$type, levels = c("mon","nmon"))
+                , subject_scale = params$subject_scale
+                , item_scale = params$item_scale
+                , subject_rho = params$subject_rho
+                , item_rho = params$item_rho) %>%
+    mutate(expt = factor(1:n())) %>%
+    group_by(expt, condition_rho, type, subject_scale, subject_rho, item_scale, item_rho) %>% #expt specific params go here
     nest() %>%
-    mutate(data2 = purrr::map(data, ~crossing(item = 1:.x$n_item
+    mutate(data = purrr::map(data, ~crossing(item = 1:.x$n_item
                                              , subject = 1:.x$n_subject
-                                             , condition = 1:4
-                                             , condition_rho = .x$condition_rho))) %>%
-    unnest(data2) %>%
-    mutate(condition_mu = map(condition, ~cbind(params$condition1_mu[.x], params$condition2_mu[.x]) +
-                                mvtnorm::rmvnorm(1, mean = rep(0,2),
-                                                 sigma = matrix(c(1, condition_rho, condition_rho, 1), 2, 2)
-                                                 ))) %>%
-    mutate(subject_mu = map(item, ~ mvtnorm::rmvnorm(1, mean = rep(0,2), sigma = subject_Sigma))) %>%
-    mutate(item_mu = map(subject, ~ mvtnorm::rmvnorm(1, mean = rep(0,2), sigma = item_Sigma))) %>%
-    mutate(Mu = pmap(list(condition_mu, subject_mu, item_mu), function(a,b,c) a + b + c)) %>%
+                                             , condition = 1:4))) %>%
+    unnest(data) %>%
+    mutate(condition_mu = map(condition, ~cbind(params$condition1_mu[.x], params$condition2_mu[.x]))) %>%
+    mutate(subject_mu = map2(subject_scale,subject_rho, ~ mvtnorm::rmvnorm(1, mean = rep(0,2), sigma = gen_cor_mat(.x,.y)))) %>%
+    mutate(item_mu = map2(item_scale, item_rho, ~ mvtnorm::rmvnorm(1, mean = rep(0,2), sigma = gen_cor_mat(.x,.y)))) %>%
+    mutate(Mu = pmap(list(condition_mu, subject_mu, item_mu, condition_rho),
+                     function(a,b,c,d) mvtnorm::rmvnorm(1, mean = a + b + c, sigma = matrix(c(1, d, d, 1), 2, 2)) )) %>%
     mutate(evidence_x = map_dbl(Mu, ~purrr::pluck(.x, 1)),
            evidence_y = map_dbl(Mu, ~purrr::pluck(.x, 2))
     ) %>%
@@ -32,9 +28,38 @@ gen_grand_data <- function(params){
     select(-Mu) %>%
     mutate(y1 = map_dbl(y_sim, ~purrr::pluck(.x, 1)),
            y2 = map_dbl(y_sim, ~purrr::pluck(.x, 2))
-    )%>%
-    mutate(condition2 = plyr::mapvalues(condition, from = 1:4, to = c(1,3,2,4)))
+    )
 
   return(d)
 }
 
+
+gen_stan_data <- function(d){
+
+  stan_data <- d %>%
+    select(condition, item, y1, y2, subject) %>%
+    mutate(condition = factor(condition),
+           item = factor(item),
+           subject = factor(subject)) %>%
+    tidybayes::compose_data() %>%
+    c(.,
+      D = 2,
+      priors = list(c(1, 2, 1, 2, 1, 1.5, 1)),
+      y  = list(cbind(d$y1, d$y2))
+    )
+
+  stan_data$X <- gen_X(d,unique(d$type))
+  stan_data$n_orders <- dim(stan_data$X)[1]
+
+
+  return(stan_data)
+}
+
+gen_cor_mat <- function(std, rho, D=2){
+
+  stds <- rep(std, times=D)
+  Omega <- matrix(c(1, rho, rho, 1), 2, 2) * (stds %*% t(stds))
+
+  return(Omega)
+
+}

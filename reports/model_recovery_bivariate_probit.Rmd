@@ -9,16 +9,17 @@ params:
   model: "bivariate_probit_mixed_onec_mo_nonc"
   flag: "dev"
   n_condition: 4
-  n_trials_per_cond: 50
-  n_subject: 40
+  condition_rho: !r c(-0.9, 0, .5, 0.9) 
+  n_subject: !r seq(from=10, to=50,length.out=5)
+  n_item: !r seq(from=20, to=60, length.out=3)
+  type: !r c("mon", "nmon")
   subject_scale: 0.5
-  item_scale: 0.01
+  item_scale: 0.5
   subject_rho: 0
   item_rho: 0
-  condition_rho: 0 
   condition1_mu: !r c(-1,-0.5,0.5,1)
   condition2_mu: !r c(-1,0.5,-0.5,1)
-  chains: 3
+  chains: 1
   iter: 1000
   warmup: 1000
   compile: 0
@@ -45,32 +46,11 @@ if (params$compile){
   rstan::stan_model(file.path(devtools::package_file(), "stan", paste0(params$model, ".stan")))
 }
 
-item_stds <- c(params$item_scale, params$item_scale)
-item_Sigma <- matrix(c(1, params$item_rho, params$item_rho, 1), 2, 2) * (item_stds %*% t(item_stds))
-
-subject_stds <- c(params$subject_scale, params$subject_scale)
-subject_Sigma <- matrix(c(1, params$subject_rho, params$subject_rho, 1), 2, 2) * (subject_stds %*% t(subject_stds))
-
-d <- crossing(condition = 1:params$n_condition,
-              item = 1:params$n_trials_per_cond,
-              subject = 1:params$n_subject,
-              rho = params$condition_rho) %>%
-  mutate(condition_mu = map(condition, ~cbind(params$condition1_mu[.x], params$condition2_mu[.x]))) %>%
-  mutate(subject_mu = map(item, ~ mvtnorm::rmvnorm(1, mean = rep(0,2), sigma = subject_Sigma))) %>%
-  mutate(item_mu = map(subject, ~ mvtnorm::rmvnorm(1, mean = rep(0,2), sigma = item_Sigma))) %>%
-  mutate(Mu = pmap(list(condition_mu, subject_mu, item_mu, rho), function(a,b,c,d) mvtnorm::rmvnorm(1, mean = a + b + c, sigma = matrix(c(1, d, d, 1), 2, 2)) )) %>%
-  mutate(evidence_x = map_dbl(Mu, ~purrr::pluck(.x, 1)),
-         evidence_y = map_dbl(Mu, ~purrr::pluck(.x, 2))
-         ) %>%
-  mutate(y_sim = map(Mu, ~if_else(.x > 0, 1, 0))) %>%
-  select(-Mu) %>%
-  mutate(y1 = map_dbl(y_sim, ~purrr::pluck(.x, 1)),
-         y2 = map_dbl(y_sim, ~purrr::pluck(.x, 2))
-  ) 
+d <- gen_grand_data(params)
 ```
 
 
-
+.
 ```{r, plot_data}
 
 d %>%
@@ -78,25 +58,14 @@ d %>%
   geom_point() +
   stat_ellipse(type = "norm", geom = "polygon") +
   coord_cartesian() +
-  coord_fixed()+
-  theme(legend.position = "none")
+  coord_fixed() +
+  facet_wrap(~condition_rho, labeller = "label_both") +
+  theme(legend.position = "none") 
+
 
 ```
 
 ```{r stan_data}
-
-stan_data <- d %>%
-  select(condition, item, y1, y2, subject) %>%
-  mutate(condition = factor(condition),
-         item = factor(item),
-         subject = factor(subject)) %>%
-  tidybayes::compose_data() %>%
-  c(.,
-    D = 2,
-    priors = list(c(1, 2, 1, 2, 1, 1.5, 1)),
-    y  = list(cbind(d$y1, d$y2))
-  )
-# stan_data$beta <- 2L
 
 # parameters that will be excluded from model
 pars <- c("theta_log", "theta_raw", "lps",
@@ -105,26 +74,28 @@ pars <- c("theta_log", "theta_raw", "lps",
          "subject_L", "item_L",
          "condition_omega")
 
+d_fit <- d %>% group_by(expt) %>%
+  nest() %>%
+  mutate(stan_data = map(data, ~gen_stan_data(.x)))
 
 ```
 
 
-```{r monotonic}
+```{r fit}
 
-stan_data$X <- gen_X(d,"mon")
-stan_data$n_orders <- dim(stan_data$X)[1]
+d_post <- d_fit %>%
+  mutate(post = map(stan_data, ~  sampling(readr::read_rds(file.path(devtools::package_file(), "stan", paste0(params$model, ".rds"))), 
+                                           data = .x, 
+                                           iter = params$warmup + params$iter,
+                                           warmup = params$warmup,
+                                           chains = params$chains
+                                           , pars = pars
+                                           , include = FALSE
+                                           , init_r = 0.5
+  )))
 
-estimated_model_mon <- sampling(readr::read_rds(file.path(devtools::package_file(), "stan", paste0(params$model, ".rds"))), 
-                                data = stan_data, 
-                                iter = params$warmup + params$iter,
-                                warmup = params$warmup,
-                                chains = params$chains
-                                , pars = pars
-                                , include = FALSE
-                                , init_r = 0.5
-)
 
-readr::write_rds(x=estimated_model_mon, path = file.path(devtools::package_file(), "output", "stan_samples", params$model, params$flag, "data_mon.rds"))
+readr::write_rds(x=d_post, path = file.path(devtools::package_file(), "output", "stan_samples", params$model, params$flag, "data_post.rds"))
 
 ```
 
@@ -136,49 +107,6 @@ post <- tidybayes::gather_samples(estimated_model_mon,
                                   condition_mu_ordered[order,question,condition]) %>%
   ungroup()
 theta <- tidybayes::gather_samples(estimated_model_mon,
-                                   theta[order]) %>%
-  ungroup() %>%
-  mutate(order = factor(order))
-
-post %>%
-  mutate(condition = factor(condition)) %>%
-  ggplot(aes(x=condition, y = estimate)) +
-  geom_violin() +
-  facet_grid(order~question, labeller = "label_both")
-
-theta %>%
-  ggplot(aes(x=order, y=estimate)) +
-  geom_violin() 
-```
-
-
-
-```{r, non-monotonic}
-
-stan_data$X <- gen_X(d,"nmon")
-stan_data$n_orders <- dim(stan_data$X)[1]
-
-estimated_model_Nmon <- sampling(readr::read_rds(file.path(devtools::package_file(), "stan", paste0(params$model, ".rds"))), 
-                                 data = stan_data, 
-                                 iter = params$warmup + params$iter,
-                                 warmup = params$warmup,
-                                 chains = params$chains
-                                 , pars = pars
-                                 , include = FALSE
-                                 , init_r = 0.5
-)
-
-readr::write_rds(x=estimated_model_Nmon, path = file.path(devtools::package_file(), "output", "stan_samples", params$model, params$flag, "data_Nmon.rds"))
-
-```
-
-
-```{r}
-
-post <- tidybayes::gather_samples(estimated_model_Nmon,
-                                  condition_mu_ordered[order,question,condition]) %>%
-  ungroup()
-theta <- tidybayes::gather_samples(estimated_model_Nmon,
                                    theta[order]) %>%
   ungroup() %>%
   mutate(order = factor(order))
