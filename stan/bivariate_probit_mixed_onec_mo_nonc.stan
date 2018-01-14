@@ -1,7 +1,7 @@
 functions {
   row_vector binormal_cdf_vector(matrix z, vector rho) {
     // NOTE: this funciton has a hard time computing values very close to 0.
-    // In those cases, if often incorrectly outputs a negative number.
+    // In those cases, it sometimes incorrectly outputs a negative number.
     // expressions come from https://github.com/stan-dev/stan/issues/2356
     // and https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2924071
 
@@ -42,6 +42,8 @@ functions {
 data {
   int<lower=0> n; // number of observations
   int<lower=1> n_condition; // number of conditions (4)
+  int<lower=1> n_subject; // The number of subjects
+  int<lower=1,upper=n_subject> subject[n]; // Index indicating the subject for a current trial
   int<lower=1> D; // number of outcomes (2)
   int<lower=1,upper=n_condition> condition[n];
   matrix<lower = 0, upper=1>[n, D] y;
@@ -50,30 +52,39 @@ data {
   matrix[n,n_condition] X[n_orders, D];
 }
 transformed data{
-  vector[n_condition] alpha = rep_vector(prior[2], n_condition);
+  row_vector[n_orders] zeroes_order = rep_row_vector(0,n_orders);
 }
 parameters{
-  matrix[n_orders, D] condition_mu_raw; // condition effects on mean of latent
   corr_matrix[D] condition_omega;
   vector[n_orders-1] theta_raw; // first value must be pinned for identifiability
-  simplex[n_condition] zeta[D]; // auxillary parameter to induce monotonic effect
+  matrix[n_condition-2, n_orders] zeta_raw; // -1 for intercept, -1 for simplex identification
+  row_vector[D] intercept;
+  row_vector[D] condition_mu_raw; // basically forced to be positive by data
+  vector<lower=0.0>[D] subject_scale; // Variance of subject-level effects
+  matrix[n_subject, D] subject_mu_raw; // Subject-level coefficients for the bivariate normal means
+  cholesky_factor_corr[D] subject_L;
 }
 transformed parameters {
   vector[n_orders] theta_log = log_softmax(append_row(0,theta_raw));
   matrix[n_orders, n] lps;
   vector[n] log_lik;
-  matrix[n_condition,D] condition_mu_ordered[n_orders]; // condition effects on mean of latent
-  vector[n_condition]  cumulative_sum_zeta = cumulative_sum(zeta);
+  matrix[n_condition, D] condition_mu_ordered[n_orders]; // condition effects on mean of latent
+  matrix[n_condition-1, n_orders] zeta = append_row(zeroes_order, zeta_raw);
+  vector[n_condition-1]  cumulative_sum_softmax_zeta[n_orders];
+  matrix[n_subject, D] subject_mu = subject_mu_raw * diag_pre_multiply(subject_scale, subject_L);
 
   // likelihood determined by mixture of possible orders
   // this would usually go in model block, but I want the log_lik for waic so
   // if put there I might need to calculate twice
   for(order in 1:n_orders){
-    condition_mu_ordered[order] = append_col(condition_mu_raw[order,1] .* cumulative_sum_zeta,
-    condition_mu_raw[order,2] .* cumulative_sum_zeta );
+    cumulative_sum_softmax_zeta[order] = cumulative_sum( softmax( col( zeta, order)));
+
+    condition_mu_ordered[order] = append_row(intercept,
+      append_col(condition_mu_raw[1] * cumulative_sum_softmax_zeta[order],
+        condition_mu_raw[2] * cumulative_sum_softmax_zeta[order] ));
 
     lps[order,] = theta_log[order] + biprobit_lpdf_vector(y,
-      append_col(X[order,1] * condition_mu_ordered[order, 1], X[order,2] * condition_mu_ordered[order, 2]),
+      subject_mu[subject] + append_col(X[order,1] * condition_mu_ordered[order,, 1], X[order,2] * condition_mu_ordered[order,, 2]),
       condition_omega[1,2] );
   }
   for (i in 1:n){
@@ -84,8 +95,13 @@ transformed parameters {
 model {
 
   // priors
-  to_vector(condition_mu_ordered) ~ normal(0, priors[1]); // consider trying student_t(3,0,1);
-  zeta ~ dirichlet(alpha);
+  intercept ~ normal(0, priors[1]); // need an intercept to allow mix of positive and negative mo effects
+  condition_mu_raw ~ normal(0, priors[2]);
+  to_vector(zeta_raw) ~ normal(0, priors[3]);
+
+  subject_scale ~ gamma(priors[4], priors[5]);
+  subject_L ~ lkj_corr_cholesky(priors[6]);
+  to_vector(subject_mu_raw) ~ normal(0, 1);  // implies ~ normal(0, subject_scale)
 
   condition_omega ~ lkj_corr(priors[6]);
 
@@ -97,4 +113,13 @@ model {
 generated quantities {
   real<lower=-1, upper=1> condition_rho = condition_omega[1,2]; // correlation to assemble
   vector[n_orders] theta = exp(theta_log);
+
+  real<lower=-1.0, upper=1.0> subject_rho; // correlation to assemble
+
+  {
+    matrix[D, D] Sigma;
+    Sigma = multiply_lower_tri_self_transpose(subject_L);
+    subject_rho = Sigma[1,2];
+  }
+
 }

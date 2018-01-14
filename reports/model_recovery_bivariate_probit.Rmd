@@ -6,12 +6,12 @@ output: html_document
 params:
   data_dir: data
   expt: CFSgonogo
-  model: "bivariate_probit_fixed_onec_int"
+  model: "bivariate_probit_mixed_onec_mo_nonc"
   flag: "dev"
   n_condition: 4
-  n_trials_per_cond: 2000
-  n_subject: 1
-  subject_scale: 0.01
+  n_trials_per_cond: 50
+  n_subject: 40
+  subject_scale: 0.5
   item_scale: 0.01
   subject_rho: 0
   item_rho: 0
@@ -93,11 +93,12 @@ stan_data <- d %>%
   tidybayes::compose_data() %>%
   c(.,
     D = 2,
-    priors = list(c(1, 2, 4, 2, 1, 2, 2)),
+    priors = list(c(1, 2, 1, 2, 1, 1.5, 1)),
     y  = list(cbind(d$y1, d$y2))
   )
 # stan_data$beta <- 2L
 
+# parameters that will be excluded from model
 pars <- c("theta_log", "theta_raw", "lps",
          "Mu_unordered", "Mu_ordered",
          "subject_mu_raw", "item_mu_raw", "subject_mu", "item_mu",
@@ -112,7 +113,6 @@ pars <- c("theta_log", "theta_raw", "lps",
 
 stan_data$X <- gen_X(d,"mon")
 stan_data$n_orders <- dim(stan_data$X)[1]
-
 
 estimated_model_mon <- sampling(readr::read_rds(file.path(devtools::package_file(), "stan", paste0(params$model, ".rds"))), 
                                 data = stan_data, 
@@ -129,9 +129,6 @@ readr::write_rds(x=estimated_model_mon, path = file.path(devtools::package_file(
 ```
 
 
-When the true effects of condition are symmetric, all monotonic orders are equally awful. The Bayesian model must choose to fit either the first or the second question well and the other poorly. Alternatively, the model can try to fit both effects equally poorly, in which case the mixing parameter will get stuck at 0.5.
-
-This isn't ideal, but also not necessarily a problem. Basically, this implies that the 
 
 ```{r}
 

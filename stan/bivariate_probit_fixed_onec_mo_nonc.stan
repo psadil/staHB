@@ -55,7 +55,7 @@ transformed data{
 parameters{
   corr_matrix[D] condition_omega;
   vector[n_orders-1] theta_raw; // first value must be pinned for identifiability
-  matrix[n_condition-2, order] zeta_raw; // -1 for intercept, -1 for simplex identification
+  matrix[n_condition-2, n_orders] zeta_raw; // -1 for intercept, -1 for simplex identification
   row_vector[D] intercept;
   row_vector[D] condition_mu_raw; // basically forced to be positive by data
 }
@@ -64,9 +64,8 @@ transformed parameters {
   matrix[n_orders, n] lps;
   vector[n] log_lik;
   matrix[n_condition, D] condition_mu_ordered[n_orders]; // condition effects on mean of latent
-  matrix[n_condition-1, order] zeta = append_row(zeroes_order, zeta_raw);
-  vector[n_condition-1]  cumulative_sum_zeta[order];
-
+  matrix[n_condition-1, n_orders] zeta = append_row(zeroes_order, zeta_raw);
+  vector[n_condition-1]  cumulative_sum_softmax_zeta[n_orders];
 
   // likelihood determined by mixture of possible orders
   // this would usually go in model block, but I want the log_lik for waic so
@@ -90,9 +89,9 @@ transformed parameters {
 model {
 
   // priors
-  condition_mu_raw ~ normal(0, priors[1]);
   intercept ~ normal(0, priors[1]); // need an intercept to allow mix of positive and negative mo effects
-  to_vector(zeta) ~ normal(0, 1);
+  condition_mu_raw ~ normal(0, priors[2]);
+  to_vector(zeta_raw) ~ normal(0, priors[3]);
 
   condition_omega ~ lkj_corr(priors[6]);
 
