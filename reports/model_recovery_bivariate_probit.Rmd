@@ -7,20 +7,20 @@ params:
   data_dir: data
   expt: CFSgonogo
   model: "bivariate_probit_mixed_onec_mo_nonc"
-  flag: "dev"
+  flag: "mono"
   n_condition: 4
-  condition_rho: !r c(-0.9, 0, .5, 0.9) 
-  n_subject: !r seq(from=10, to=50,length.out=5)
-  n_item: !r seq(from=20, to=60, length.out=3)
+  condition_rho: !r c(0, .5, -0.9) 
+  n_subject: 50
+  n_item: 40
   type: !r c("mon", "nmon")
   subject_scale: 0.5
   item_scale: 0.5
   subject_rho: 0
   item_rho: 0
   condition1_mu: !r c(-1,-0.5,0.5,1)
-  condition2_mu: !r c(-1,0.5,-0.5,1)
-  chains: 1
-  iter: 1000
+  condition2_mu: !r c(-1,-0.5,0.5,1)
+  chains: 6
+  iter: 500
   warmup: 1000
   compile: 0
 ---
@@ -82,7 +82,7 @@ d_fit <- d %>% group_by(expt) %>%
 
 
 ```{r fit}
-
+  
 d_post <- d_fit %>%
   mutate(post = map(stan_data, ~  sampling(readr::read_rds(file.path(devtools::package_file(), "stan", paste0(params$model, ".rds"))), 
                                            data = .x, 
@@ -99,6 +99,28 @@ readr::write_rds(x=d_post, path = file.path(devtools::package_file(), "output", 
 
 ```
 
+
+```{r}
+
+post <- d_post %>%
+  mutate(log_lik = map(post, ~loo::extract_log_lik(.x))) %>%
+  mutate(waic = map(log_lik, ~loo::waic(.x))) %>%
+  mutate(loo = map(log_lik, ~ loo::loo(.x)))
+
+
+loo::compare(extract2(post$waic,1),extract2(post$waic,2))
+```
+
+```{r}
+post_nmon <- readr::read_rds(path = file.path(devtools::package_file(), "output", "stan_samples", params$model, 'dev', "data_post.rds"))
+
+post_nmon <- post_nmon %>%
+  mutate(log_lik = map(post, ~loo::extract_log_lik(.x))) %>%
+  mutate(waic = map(log_lik, ~loo::waic(.x))) %>%
+  mutate(loo = map(log_lik, ~ loo::loo(.x)))
+
+loo::compare(extract2(post_nmon$waic,1),extract2(post_nmon$waic,2))
+```
 
 
 ```{r}
