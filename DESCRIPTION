@@ -8,7 +8,8 @@ Depends:
     magrittr,
     rstan,
     tidyverse,
-    Hmisc
+    Hmisc,
+    stringdist
 License: What license is it under?
 Encoding: UTF-8
 LazyData: true
@@ -20,5 +21,6 @@ Imports:
     rstan,
     tidyverse,
     magrittr,
-    mvtnorm
+    mvtnorm,
+    stringdist
 RoxygenNote: 6.0.1

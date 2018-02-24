@@ -65,9 +65,3 @@ d <- readr::read_csv(file.path(devtools::package_file(), 'data', 'data.csv')) %>
   
 ```
 
-
-
-```{r}
-
-```
-

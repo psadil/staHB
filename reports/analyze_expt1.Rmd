@@ -7,20 +7,11 @@ params:
   data_dir: data
   expt: CFSgonogo
   model: "bivariate_probit_mixed_onec_mo_nonc"
-  flag: "mono"
-  n_condition: 4
-  condition_rho: !r c(0, .5, -0.9) 
-  n_subject: 50
-  n_item: 40
+  flag: "expt1"
   type: !r c("mon", "nmon")
-  subject_scale: 0.5
-  item_scale: 0.5
-  subject_rho: 0
-  item_rho: 0
-  condition1_mu: !r c(-1,-0.5,0.5,1)
-  condition2_mu: !r c(-1,0.5,-0.5,1)
+  cutoff: 1
   chains: 6
-  iter: 500
+  iter: 1000
   warmup: 1000
   compile: 0
 ---
@@ -46,30 +37,24 @@ if (params$compile){
   rstan::stan_model(file.path(devtools::package_file(), "stan", paste0(params$model, ".stan")))
 }
 
-d <- gen_grand_data(params)
+targets <- readr::read_csv(file.path(devtools::package_file(), 'data', 'objectNames.csv'), col_names = FALSE)
+
+
+d <- readr::read_csv(file.path(devtools::package_file(), 'data', 'data.csv')) %>%
+  mutate(targets = map(object, ~targets[.x,])) %>%
+  mutate(firstTarget = map_chr(targets, ~extract2(.x,1))) %>%
+  mutate(dl = map2(targets, responses, ~stringdist::stringdist(purrr::as_vector(.x), .y, method="dl"))) %>%
+  mutate(minDist = map_dbl(dl, ~min(.x, na.rm=TRUE))) %>%
+  mutate(y2 = if_else(minDist < params$cutoff, 1L, 0L)) %>%
+  rename(y1 = afc,
+         item = object) %>%
+  select(-pas, -pas2,-objectPair,-responses,-targets,-dl, -minDist, -firstTarget,-list) %>%
+  tidyr::crossing(., type = params$type) %>%
+  mutate(expt = if_else(type=="mon",1,2)) 
+
+
 ```
 
-
-.
-```{r, plot_data}
-
-d %>%
-  rename(Correlation = condition_rho) %>%
-  mutate(condition = factor(condition)) %>%
-  ggplot(aes(x = evidence_x, y = evidence_y, fill = condition)) +
-  # geom_point() +
-  stat_ellipse(type = "norm", geom = "polygon") +
-  coord_cartesian() +
-  coord_fixed() +
-  scale_y_continuous(name = "Evidence for Task 2") +
-  scale_x_continuous(name = "Evidence for Task 1") +
-  facet_wrap(~Correlation, labeller = "label_both") +
-  theme_classic() +
-  theme(legend.position = "bottom",
-        strip.background = element_blank()) 
-ggsave("nonmono_data.png", width = 6, height = 4)
-
-```
 
 ```{r stan_data}
 
