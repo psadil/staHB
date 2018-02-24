@@ -12,7 +12,8 @@ gen_grand_data_snr <- function(params){
                 , subject_scale = params$subject_scale
                 , item_snr = params$item_snr
                 , subject_rho = params$subject_rho
-                , item_rho = params$item_rho) %>%
+                , item_rho = params$item_rho
+                , rep = 1:params$reps) %>%
     mutate(expt = factor(1:n())) %>%
     group_by(expt, condition_rho, type_data, subject_scale, subject_rho, item_snr, item_rho) %>% #expt specific params go here
     nest() %>%

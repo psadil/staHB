@@ -7,7 +7,8 @@ params:
   data_dir: data
   expt: CFSgonogo
   model: "bivariate_probit_mixed_onec_mo_nonc"
-  flag: "item-10-20-30_snr-0p5_rho-0-0p5-n0p9"
+  flag: "item-10-20-30_snr-0p5_rho-0-0p5-n0p9_rep-5"
+  reps: 5
   n_condition: 4
   condition_rho: !r c(0, 0.5, -0.9) 
   n_subject: 40
