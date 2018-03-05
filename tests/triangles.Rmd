@@ -7,15 +7,15 @@ params:
   data_dir: data
   expt: CFSgonogo
   model: "bivariate_probit_sim_nr"
-  flag: "single_rho-3_radius-1_radian-3"
+  flag: "single_rho-3_radius-10_radian-10"
   reps: 1
   n_condition: 3
-  condition_rho: !r seq(from = -0.5, to = 0.5, length.out = 5) 
+  condition_rho: !r seq(from = -0.5, to = 0.5, length.out = 3) 
   n_subject: 1
   n_item: 1
   type_model: !r c("mon", "nmon")
-  radius: !r seq(from = 0, to = 1, length.out = 5)
-  radian: !r c(pi/6, pi/3, pi/2)
+  radius: !r seq(from = 0, to = 1, length.out = 10)
+  radian: !r seq(from = pi/6, to = pi/2, length.out = 10)
   base_length: 2
   subject_scale: 0
   item_scale: !r sqrt(0) # sqrt to remind that model will produce standard deviation
@@ -133,7 +133,7 @@ for(m in 1:nrow(d_fit)){
                         , control = list(adapt_delta = .99)
   )
   
-  if (mod(m,20) == 0){
+  if (mod(m,20) == 0 || m==nrow(d_post)){
     d_post <- d_fit %>%
       mutate(post = post)
     
@@ -166,48 +166,25 @@ d_post <- readr::read_rds(path = file.path(devtools::package_file(), "output", "
 
 
 post <- d_post %>%
-  mutate(log_lik = map(post, ~loo::extract_log_lik(.x))) 
+  mutate(log_lik = map(post, ~loo::extract_log_lik(.x))) %>%
+  mutate(waic = map(log_lik, ~loo::waic(.x))) %>%
+  mutate(lpd_waic = map_dbl(waic, ~.x$elpd_waic + .x$p_waic))
 
-
-# loo::compare(extract2(post$waic,1),extract2(post$waic,2))
 ```
+
 
 
 ```{r}
 
-# post2 <- vector(mode = "list", length = nrow(d_fit))
-# 
-# for(m in 7:7){
-#   model <- stan_model(file.path(devtools::package_file(), "stan", paste0(params$model, ".stan")))
-#   post2[[m]] <- vb(model,
-#                    data = d_fit$stan_data[[m]],
-#                    iter = 10000
-#                    , algorithm = "fullrank"
-#                    , pars = pars
-#                    , include = FALSE
-#                    , init_r = 0.5
-#   )
-# 
-# 
-#   readr::write_rds(x=post2[[m]], path = file.path(devtools::package_file(), "output", "stan_samples", params$model, params$flag, glue::glue("data_post-{m}_vb.rds")))
-# 
-#   loaded_dlls = getLoadedDLLs()
-#   if(str_detect(loaded_dlls, model@dso@dso_filename) ){
-#     message("Unloading DLL for model dso ", model@dso@dso_filename)
-#     model.dll = loaded_dlls[[model@dso@dso_filename]][['path']]
-#     dyn.unload(model.dll)
-#   } else {
-#     message("No loaded DLL for model dso ", model@dso@dso_filename)
-#   }
-#   rm(model)
-# }
-# 
-# d_post <- d_fit %>%
-#   mutate(post2 = post2)
-# 
-# 
-# readr::write_rds(x=d_post, path = file.path(devtools::package_file(), "output", "stan_samples", params$model, params$flag, "data_post_vb.rds"))
-
+post %>%
+  select(expt, radius_mid, radian_mid, condition_rho, lpd_waic, type_model) %>%
+  spread(type_model, lpd_waic) %>%
+  mutate(difference = nmon - mon) %>%
+  ggplot(aes(x=radian_mid, y = radius_mid, fill=difference)) +
+  geom_raster() +
+  coord_fixed() +
+  # geom_contour(color = "white", aes(alpha = ..level..), size = 1, binwidth = .2) +
+  facet_wrap( ~ condition_rho, labeller = "label_both")
 
 ```
 
