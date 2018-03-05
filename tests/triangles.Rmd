@@ -1,0 +1,458 @@
+---
+title: "triangles"
+author: "pss"
+date: "February 26, 2018"
+output: html_document
+params:
+  data_dir: data
+  expt: CFSgonogo
+  model: "bivariate_probit_sim_nr"
+  flag: "single_rho-3_radius-1_radian-3"
+  reps: 1
+  n_condition: 3
+  condition_rho: !r seq(from = -0.5, to = 0.5, length.out = 5) 
+  n_subject: 1
+  n_item: 1
+  type_model: !r c("mon", "nmon")
+  radius: !r seq(from = 0, to = 1, length.out = 5)
+  radian: !r c(pi/6, pi/3, pi/2)
+  base_length: 2
+  subject_scale: 0
+  item_scale: !r sqrt(0) # sqrt to remind that model will produce standard deviation
+  subject_rho: 0
+  item_rho: 0
+  chains: 6
+  iter: 500
+  warmup: 1000
+  compile: 0
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, root.dir = devtools::package_file(), message = FALSE, warning = FALSE, fig.width = 7, fig.asp = 1, cache = FALSE, cache.path = paste0(file.path(devtools::package_file(), "output", "cache", params$model, params$flag, params$participant), .Platform$file.sep), fig.path = paste0(file.path(devtools::package_file(), "output", "figures", params$model, params$flag), .Platform$file.sep) )
+
+devtools::load_all()
+
+dir.model <- file.path(dir.stan_samples, params$model)
+if (!dir.exists(dir.model)){
+  dir.create(dir.model)
+}
+dir.model_flag <- file.path(dir.model, params$flag)
+if (!dir.exists(dir.model_flag)){
+  dir.create(dir.model_flag)
+}
+
+options(mc.cores = params$chains)
+rstan::rstan_options("auto_write" = TRUE)
+
+if (params$compile){
+  rstan::stan_model(file.path(devtools::package_file(), "stan", paste0(params$model, ".stan")))
+}
+
+
+d <- gen_grand_data_triangle_nr(params, tau = 0)
+
+```
+
+
+```{r}
+
+d %>%
+  filter(rep == 1 & condition_rho == 0) %>%
+  mutate(radius_mid = factor(round(radius_mid, digits = 2)),
+         radian_mid = factor(round(radian_mid, digits = 2))) %>%
+  ggplot(aes(x=x, y=y, color = radian_mid, group = radian_mid)) +
+  facet_wrap( ~ radius_mid, labeller = "label_both") +
+  geom_polygon(alpha = 0.2) +
+  geom_point( aes(shape = condition), size = 2 ) +
+  coord_fixed() +
+  scale_x_continuous() + # breaks  = c(-2, 0, 2), limits = c(-1.5, 1.5)
+  scale_y_continuous() +
+  geom_hline(yintercept = 0) +
+  geom_vline(xintercept = 0) +
+  theme_classic() +
+  theme(strip.background = element_blank())
+
+```
+
+
+```{r}
+
+# d %>%
+#   filter(rep == 1) %>%
+#   mutate(radius_mid = factor(radius_mid),
+#          radian_mid = fct_rev(factor(round(radian_mid, digits = 2)))) %>%
+#   ggplot(aes(x=evidence_x, y=evidence_y, color = condition, shape = condition)) +
+#   # stat_ellipse(type = "norm", geom = "polygon", alpha = .2) +
+#   geom_point(alpha = 1 ) +
+#   coord_fixed() +
+#   facet_grid(condition_rho ~ radius_mid, labeller = "label_both") +
+#   scale_x_continuous() + # breaks  = c(-2, 0, 2), limits = c(-1.5, 1.5)
+#   scale_y_continuous() +
+#   geom_hline(yintercept = 0) +
+#   geom_vline(xintercept = 0) +
+#   theme_classic() +
+#   theme(strip.background = element_blank())
+
+```
+
+
+```{r stan_data}
+
+# parameters that will be excluded from model
+pars <- c("theta_log", "theta_raw", "lps", "zeta_raw",
+         "Mu_unordered", "Mu_ordered",
+         "subject_mu_raw", "item_mu_raw", "subject_mu",
+         "subject_L", "item_L",
+         "condition_omega")
+
+d_fit <- d %>%
+  filter((not(radian_mid > pi/5) & radius_mid == 0) | radius_mid > 0) %>%
+  group_by(radius_mid, base_length, radian_mid, theta2, condition_rho, expt, rep) %>%
+  nest() %>%
+  crossing(type_model = params$type_model) %>%
+  mutate(data = map2(data, type_model, ~.x %>% mutate(type = .y))) %>%
+  mutate(stan_data = map2(data,condition_rho, ~gen_stan_data(.x, degree = "min", rho = .y)))
+
+```
+
+
+```{r fit}
+
+post <- vector(mode = "list", length = nrow(d_fit))
+
+for(m in 1:nrow(d_fit)){
+  model <- stan_model(file.path(devtools::package_file(), "stan", paste0(params$model, ".stan")))
+  post[[m]] <- sampling(model,
+                        data = d_fit$stan_data[[m]],
+                        iter = params$warmup + params$iter,
+                        warmup = params$warmup,
+                        chains = params$chains
+                        , pars = pars
+                        , include = FALSE
+                        , init_r = 0.25
+                        , control = list(adapt_delta = .99)
+  )
+  
+  if (mod(m,20) == 0){
+    d_post <- d_fit %>%
+      mutate(post = post)
+    
+    
+    readr::write_rds(x=d_post, path = file.path(devtools::package_file(), "output", "stan_samples", params$model, params$flag, glue::glue("data_post-{m}.rds")))
+    
+  }
+  
+  loaded_dlls = getLoadedDLLs()
+  loaded_dlls = loaded_dlls[str_detect(names(loaded_dlls), '^file')]
+  if (length(loaded_dlls) > 10) {
+    for (dll in head(loaded_dlls, -10)) {
+      message("Unloading DLL ", dll[['name']], ": ", dll[['path']])
+      dyn.unload(dll[['path']])
+    }
+  }
+  rm(model)
+}
+
+
+readr::write_rds(x=d_post, path = file.path(devtools::package_file(), "output", "stan_samples", params$model, params$flag, "data_post.rds"))
+
+```
+
+
+
+```{r}
+
+d_post <- readr::read_rds(path = file.path(devtools::package_file(), "output", "stan_samples", params$model, params$flag, "data_post.rds"))
+
+
+post <- d_post %>%
+  mutate(log_lik = map(post, ~loo::extract_log_lik(.x))) 
+
+
+# loo::compare(extract2(post$waic,1),extract2(post$waic,2))
+```
+
+
+```{r}
+
+# post2 <- vector(mode = "list", length = nrow(d_fit))
+# 
+# for(m in 7:7){
+#   model <- stan_model(file.path(devtools::package_file(), "stan", paste0(params$model, ".stan")))
+#   post2[[m]] <- vb(model,
+#                    data = d_fit$stan_data[[m]],
+#                    iter = 10000
+#                    , algorithm = "fullrank"
+#                    , pars = pars
+#                    , include = FALSE
+#                    , init_r = 0.5
+#   )
+# 
+# 
+#   readr::write_rds(x=post2[[m]], path = file.path(devtools::package_file(), "output", "stan_samples", params$model, params$flag, glue::glue("data_post-{m}_vb.rds")))
+# 
+#   loaded_dlls = getLoadedDLLs()
+#   if(str_detect(loaded_dlls, model@dso@dso_filename) ){
+#     message("Unloading DLL for model dso ", model@dso@dso_filename)
+#     model.dll = loaded_dlls[[model@dso@dso_filename]][['path']]
+#     dyn.unload(model.dll)
+#   } else {
+#     message("No loaded DLL for model dso ", model@dso@dso_filename)
+#   }
+#   rm(model)
+# }
+# 
+# d_post <- d_fit %>%
+#   mutate(post2 = post2)
+# 
+# 
+# readr::write_rds(x=d_post, path = file.path(devtools::package_file(), "output", "stan_samples", params$model, params$flag, "data_post_vb.rds"))
+
+
+```
+
+
+```{r}
+
+d <- gen_d(n_b = 100, n_theta = 8, n_r = 100, max_theta1 = 3 * (pi/2)) %>%
+  mutate(condition = plyr::mapvalues(condition, 1:3 ,c("one","two","three"))) %>%
+  gather(key = question, value = probit, c(x,y)) %>%
+  spread(condition, probit) %>%
+  group_by(r,b,theta1) %>%
+  nest() %>%
+  mutate(expt = 1:n()) %>%
+  unnest() %>%
+  group_by(expt, question, r, b, theta1, theta2) %>%
+  nest() %>%
+  spread(question,data) %>%
+  mutate(fit = map2_dbl(x,y, mr2_sse),
+         fit = if_else(fit < 1e-5,0,fit)) %>%
+  mutate(theta1 = round(theta1, digits = 2)) 
+# %>%
+#   mutate(data = map2(x,y, ~ rbind(.x ,.y ) %>%
+#                        mutate(question = c("x","y")) %>%
+#                        gather(condition,probit, c("one","two","three"))))
+
+  
+d %>%  
+  ggplot(aes(x=b, y=r, fill = fit, z = fit)) +
+  geom_raster() +
+  coord_fixed() +
+  # scale_fill_gradient( )+
+  geom_contour(color = "white", aes(alpha = ..level..), size = 1, binwidth = .2) +
+  # geom_contour(color = "white", bins = 10) +
+  facet_wrap(~theta1, labeller = "label_both") 
+# +
+#   scale_alpha_discrete(range = c())
+
+```
+
+Note that, in the bottom plots where there are contours below the diagonal, this corresponds to when the best fitting monotonic function has changed orders (e.g., x goes from 1 < 2 < 3 to 1 < 3 < 2). When such swaps aren't available, everythign below the diagonal is fit well with a monotonic step function.
+
+For this, set the length of the base to 2. Then, choose theta of $\frac{\pi}{2}$. We sample from 5 levels of radius. Twice when the function is monotonic function, once when the the fit transitions, and from two levels of non-monotonicity.
+
+
+```{r}
+d <- gen_d(n_b = 2, n_theta = 100, n_r = 100, max_theta1 = 3 * (pi/2)) %>%
+  mutate(condition = plyr::mapvalues(condition, 1:3 ,c("one","two","three"))) %>%
+  gather(key = question, value = probit, c(x,y)) %>%
+  spread(condition, probit) %>%
+  group_by(r,b,theta1) %>%
+  nest() %>%
+  mutate(expt = 1:n()) %>%
+  unnest() %>%
+  group_by(expt, question, r, b, theta1, theta2) %>%
+  nest() %>%
+  spread(question,data) %>%
+  mutate(fit = map2_dbl(x,y, mr2_sse),
+         fit = if_else(fit < 1e-5,0,fit)) 
+
+  
+d %>%  
+  ggplot(aes(x=theta1, y=r, fill = fit, z = fit)) +
+  geom_raster() +
+  geom_contour(color = "white", aes(alpha = ..level..), binwidth = .5) +
+  facet_wrap(~b, nrow = 2)
+
+
+```
+
+
+```{r}
+
+gen_d(n_b = 50, n_theta = 3, n_r = 50) %>%
+  filter(condition == 1) %>%
+  mutate(rat = (r*sin(theta1) / (b*sin(theta2)) ),
+         dif = (r*sin(theta1)) - (b*sin(theta2)),
+         theta1 = round(theta1, digits = 2)) %>%
+  ggplot(aes(x=b, y=r, fill = dif, z = dif)) +
+  geom_raster() +
+  coord_fixed() +
+  scale_fill_gradient2(low = scales::muted("blue"), high = scales::muted("red"), limits = c(-1, 1), breaks = c(-1,0,1)) +
+  geom_contour(color = "white", bins = 20) +
+  facet_wrap(~theta1, labeller = "label_both") 
+
+
+
+```
+
+
+
+```{r}
+
+crossing(x = seq(from=-2, to = 2,length.out = 50),
+         y = seq(from=-2, to = 2,length.out = 50),
+         mu = seq(from = -1, to = 1, length.out = 3),
+         rho = unique(d$condition_rho)) %>%
+  mutate(cdf = pmap_dbl(list(x=x,y=y,rho=rho, mu=mu), function(x,y,rho,mu) mvtnorm::pmvnorm(upper = c(x,y), mean = c(0, mu), corr = matrix(c(1, rho, rho, 1), nrow = 2) ) )) %>%
+  mutate(mu = factor(mu)) %>%
+  ggplot(aes(x = x, y = y, fill = cdf, z = cdf)) +
+  facet_grid(mu~rho) +
+  geom_raster() +
+  coord_fixed() +
+  geom_contour(color = "black", binwidth = 0.05, linetype = "solid") +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = 0) +
+  scale_fill_gradient2(midpoint = 0.5, low = scales::muted("orange"), high = scales::muted("green"),
+                       limits = c(0,1), breaks = c(0,.5,1))
+
+```
+
+
+
+```{r}
+
+crossing(x = seq(from=-4,to = 4,length.out = 50),
+         y = seq(from=-4,to = 4,length.out = 50),
+         mu1 = seq(from = -1, to = 1, length.out = 3),
+         mu2 = seq(from = -1, to = 2, length.out = 4),
+         rho = c(0, .95, -.95)) %>%
+    filter((mu1 == -1 & mu2 == -1) | (mu1 == -1 & mu2 == 2) | (mu1 == 1 & mu2 == 1)) %>%
+  mutate(pdf = pmap_dbl(list(x=x,y=y,rho=rho, mu1=mu1,mu2=mu2), function(x,y,rho, mu1,mu2) mvtnorm::dmvnorm(x = c(x,y), mean = c(mu1, mu2), sigma = matrix(c(1, rho, rho, 1), nrow = 2) ) )) %>%
+  mutate(mu2 = factor(mu2)) %>%
+  ggplot(aes(x = x, y = y, fill = pdf, z = pdf, group = mu2, color = mu2)) +
+  facet_grid(.~rho) +
+  geom_raster() +
+  coord_fixed() +
+  geom_contour(binwidth = 0.05, linetype = "solid") +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = 0) +
+  geom_segment(x = -1, y = -1, xend = -1, yend = 2, color = "black", size = 2) +
+  geom_segment(x = -1, y = 2, xend = 1, yend = 1, color = "black", size = 2)
+
+```
+
+```{r}
+d2 <- crossing(#p = seq(from = 0.05, to = .95, length.out = 25),
+  p = c(0.25, 0.5, 0.75),
+  p2 = c(0.25, 0.5, 0.75),
+  mu1 = seq(from = -1, to = 1, length.out = 3),
+  mu2 = seq(from = -1, to = 2, length.out = 4),
+  rho = c(0, .95, -.95)) %>%
+  filter((mu1 == -1 & p == 0.25 & p2 == 0.25) |
+           (mu1 == -1  & p == 0.5 & p2 == 0.5) |
+           (mu1 == 1  & p == 0.75 & p2 == 0.75)) %>%
+  mutate(q = pmap_dbl(list(p=p,rho=rho, mu1=mu1, mu2=mu2), 
+                      function(p,rho, mu1, mu2) mvtnorm::qmvnorm(p, mean = c(mu1, mu2), corr = matrix(c(1, rho, rho, 1), nrow = 2) )$quantile ),
+         q2 = pmap_dbl(list(p=p2,rho=rho, mu1=mu1, mu2=mu2), 
+                  function(p,rho, mu1, mu2) mvtnorm::qmvnorm(p, mean = c(mu1, mu2), corr = matrix(c(1, rho, rho, 1), nrow = 2) )$quantile )
+  ) %>%
+  mutate(rho = factor(rho),
+         mu1 = factor(mu1),
+         mu2 = factor(mu2))
+```
+
+
+```{r}
+
+d2 %>%
+  ggplot(aes(x = p, y = p2, color = rho)) +
+  facet_grid(mu2 ~rho) +
+  geom_point() +
+  coord_fixed()
+
+d2 %>%
+  ggplot(aes(x = q, y = q2, color = rho, shape = mu2)) +
+  facet_grid(mu2 ~ rho) +
+  geom_point() +
+  geom_line() +
+  coord_fixed()
+
+```
+
+
+```{r}
+
+crossing(mu1 = seq(from = -1, to = 1, length.out = 3),
+         mu2 = seq(from = -1, to = 2, length.out = 4),
+         rho = c(0, .95, -.95),
+         x = c(.25,.5,.75),
+         y = c(.25,.5,.75)) %>%
+    filter((mu1 == -1 & mu2 == -1 & x == .25 & y == .25) |
+             (mu1 == 0 & mu2 == 2 & x == .5 & y == .5) | 
+             (mu1 == 1 & mu2 == 1 & x == .75 & y == .75)) %>%
+  mutate(cdf = pmap_dbl(list(x=x,y=y,rho=rho, mu1=mu1, mu2=mu2), function(x,y,rho,mu1,mu2) mvtnorm::pmvnorm(upper = c(x,y), mean = c(mu1, mu2), corr = matrix(c(1, rho, rho, 1), nrow = 2) ) )) %>%
+  mutate(mu1 = factor(mu1),
+         mu2 = factor(mu2)) %>%
+  ggplot(aes(x = x, y = y, color = cdf)) +
+  facet_grid(.~rho) +
+  geom_point() +
+  coord_fixed() +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = 0) 
+
+
+crossing(mu1 = seq(from = -1, to = 1, length.out = 3),
+         mu2 = seq(from = -1, to = 2, length.out = 4),
+         rho = c(0, .95, -.95),
+         x = c(.25,.5,.75),
+         y = c(.25,.5,.75)) %>%
+    filter((mu1 == -1 & mu2 == -1 & x == .25 & y == .25) |
+             (mu1 == 0 & mu2 == 2 & x == .5 & y == .5) | 
+             (mu1 == 1 & mu2 == 1 & x == .75 & y == .75)) %>%
+  mutate(cdf = pmap_dbl(list(x=x,y=y,rho=rho, mu1=mu1, mu2=mu2), function(x,y,rho,mu1,mu2) mvtnorm::pmvnorm(upper = c(x,y), mean = c(mu1, mu2), corr = matrix(c(1, rho, rho, 1), nrow = 2) ) )) %>%
+  mutate(mu1 = factor(mu1),
+         mu2 = factor(mu2)) %>%
+  ggplot(aes(x = cdf, y = sqrt(cdf))) +
+  facet_grid(.~rho) +
+  geom_point() +
+  coord_fixed() +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = 0) 
+```
+
+
+
+
+```{r}
+
+
+d2 <- crossing(x = seq(from=-4,to = 4,length.out = 50),
+         y = seq(from=-4,to = 4,length.out = 50),
+         mu1 = seq(from = -1, to = 1, length.out = 3),
+         mu2 = seq(from = -1, to = 2, length.out = 4),
+         rho = c(0, .95, -.95)) %>%
+    filter((mu1 == -1 & mu2 == -1 & x > -1 & y > -1) |
+             (mu1 == -1 & mu2 == 2 & x < -1 & y < 2) |
+             (mu1 == 1 & mu2 == 1 & x < 1 & y < 1)) %>%
+  mutate(pdf = pmap_dbl(list(x=x,y=y,rho=rho, mu1=mu1,mu2=mu2), 
+                        function(x,y,rho, mu1,mu2) mvtnorm::dmvnorm(x = c(x,y), mean = c(mu1, mu2), sigma = matrix(c(1, rho, rho, 1), nrow = 2) ) )) %>%
+  filter(pdf > .1) %>%
+  mutate(cdf = pmap_dbl(list(x=x,y=y,rho=rho, mu1=mu1, mu2=mu2), 
+                        function(x, y, rho, mu1, mu2) mvtnorm::pmvnorm(upper = c(x,y), mean = c(0, 0), corr = matrix(c(1, rho, rho, 1), nrow = 2) ) )) %>%
+  mutate(mu1 = factor(mu1),
+         mu2 = factor(mu2),
+         rho = factor(rho))
+
+```
+
+```{r}
+
+d2 %>%
+  ggplot(aes(x = cdf^(3/4), y = cdf^(1/4), color = mu2)) +
+  geom_point() +
+  facet_wrap(~rho) +
+  coord_fixed()
+
+```
+

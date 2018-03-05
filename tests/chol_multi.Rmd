@@ -1,0 +1,53 @@
+---
+title: "Untitled"
+author: "pss"
+date: "March 4, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+
+```{r}
+
+n <- 100
+
+rho <- 0.5
+Omega <- matrix(c(1,rho,rho,1),nrow = 2)
+L_Omega <- t(chol(Omega))
+tau <- 0
+tau_diag <- diag(tau,2)
+item_mu_raw <- rbind(rnorm(n),rnorm(n))
+item_mu <- rbind(rep(0,times=n), rep(1,times=n))
+
+item_effect <- t(item_mu + ( (tau_diag %*% L_Omega) %*% item_mu_raw ))
+
+cov.wt(item_effect, cor=TRUE)
+
+```
+
+```{r}
+tibble(x = item_effect[,1],
+       y = item_effect[,2]) %>%
+  ggplot(aes(x=x,y=y)) +
+  geom_point() +
+  coord_fixed()
+
+```
+
+
+```{r}
+
+tibble(x = item_effect[,1],
+       y = item_effect[,2]) %>%
+  ggplot(aes(x=x,y=y)) +
+  stat_ellipse(type = "norm", geom = "polygon", alpha = .2) +
+  coord_fixed()
+
+
+```
+

@@ -6,23 +6,23 @@ output: html_document
 params:
   data_dir: data
   expt: CFSgonogo
-  model: "bivariate_probit_mixed_onec_mo_nonc"
+  model: "bivariate_probit_sim"
   flag: "part-30_item-20_snr-0p5_rho-0-0p5-n0p9_rep-5"
   reps: 5
-  n_condition: 4
+  n_condition: 3
   condition_rho: !r c(0, 0.5, -0.9) 
-  n_subject: 30
-  n_item: !r c(20)
+  n_subject: 1
+  n_item: !r c(1)
   type_model: !r c("mon", "nmon")
   type_data: !r c("mon", "nmon")
-  subject_scale: 0.5
+  subject_scale: 0
   item_snr: !r c(2)
   subject_rho: 0
   item_rho: 0
   chains: 6
   iter: 500
   warmup: 1000
-  compile: 0
+  compile: 1
 ---
 
 ```{r setup, include=FALSE, warning=FALSE}
@@ -135,7 +135,7 @@ d_fit <- d %>%
   
 post <- vector(mode = "list", length = nrow(d_fit))
 
-for(m in 1:6){
+for(m in 1:1){
   model <- stan_model(file.path(devtools::package_file(), "stan", paste0(params$model, ".stan")))
   post[[m]] <- sampling(model, 
                         data = d_fit$stan_data[[m]], 
@@ -146,11 +146,7 @@ for(m in 1:6){
                         , include = FALSE
                         , init_r = 0.5
   )
-  
-  d_post <- d_fit %>%
-    mutate(post = post)
-  
-  readr::write_rds(x=d_post, path = file.path(devtools::package_file(), "output", "stan_samples", params$model, params$flag, glue::glue("data_post-{m}.rds")))
+  readr::write_rds(x=post[[m]], path = file.path(devtools::package_file(), "output", "stan_samples", params$model, params$flag, glue::glue("data_post-{m}.rds")))
   
   loaded_dlls = getLoadedDLLs()
   if(str_detect(loaded_dlls, model@dso@dso_filename) ){
@@ -162,6 +158,9 @@ for(m in 1:6){
   }
   rm(model)
 }
+
+d_post <- d_fit %>%
+  mutate(post = post)
 
 
 readr::write_rds(x=d_post, path = file.path(devtools::package_file(), "output", "stan_samples", params$model, params$flag, "data_post.rds"))

@@ -1,7 +1,7 @@
 functions {
   row_vector binormal_cdf_vector(matrix z, vector rho) {
     // NOTE: this funciton has a hard time computing values very close to 0.
-    // In those cases, if often incorrectly outputs a negative number.
+    // In those cases, it sometimes incorrectly outputs a negative number.
     // expressions come from https://github.com/stan-dev/stan/issues/2356
     // and https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2924071
 
@@ -42,6 +42,8 @@ functions {
 data {
   int<lower=0> n; // number of observations
   int<lower=1> n_condition; // number of conditions (4)
+  int<lower=1> n_item; // The number of subjects
+  int<lower=1,upper=n_item> item[n]; // Index indicating the subject for a current trial
   int<lower=1> D; // number of outcomes (2)
   int<lower=1,upper=n_condition> condition[n];
   matrix<lower = 0, upper=1>[n, D] y;
@@ -51,6 +53,7 @@ data {
 }
 transformed data{
   row_vector[n_orders] zeroes_order = rep_row_vector(0,n_orders);
+	corr_matrix[D] item_L = diag_matrix(rep_vector(1.0,D));
 }
 parameters{
   corr_matrix[D] condition_omega;
@@ -58,6 +61,8 @@ parameters{
   matrix[n_condition-2, n_orders] zeta_raw; // -1 for intercept, -1 for simplex identification
   row_vector[D] intercept;
   row_vector[D] condition_mu_raw; // basically forced to be positive by data
+  vector<lower=0.0>[D] item_scale; // Variance of subject-level effects
+  matrix[D, n_item] item_mu_raw; // Subject-level coefficients for the bivariate normal means
 }
 transformed parameters {
   vector[n_orders] theta_log = log_softmax(append_row(0,theta_raw));
@@ -66,6 +71,7 @@ transformed parameters {
   matrix[n_condition, D] condition_mu_ordered[n_orders]; // condition effects on mean of latent
   matrix[n_condition-1, n_orders] zeta = append_row(zeroes_order, zeta_raw);
   vector[n_condition-1]  cumulative_sum_softmax_zeta[n_orders];
+  matrix[n_item, D] item_mu = diag_pre_multiply(item_scale, item_L) * item_mu_raw;
 
   // likelihood determined by mixture of possible orders
   // this would usually go in model block, but I want the log_lik for waic so
@@ -78,7 +84,7 @@ transformed parameters {
         condition_mu_raw[2] * cumulative_sum_softmax_zeta[order] ));
 
     lps[order,] = theta_log[order] + biprobit_lpdf_vector(y,
-      append_col(X[order,1] * condition_mu_ordered[order,, 1], X[order,2] * condition_mu_ordered[order,, 2]),
+      item_mu[item] + append_col(X[order,1] * condition_mu_ordered[order,, 1], X[order,2] * condition_mu_ordered[order,, 2]),
       condition_omega[1,2] );
   }
   for (i in 1:n){
@@ -93,6 +99,10 @@ model {
   condition_mu_raw ~ normal(0, priors[2]);
   to_vector(zeta_raw) ~ normal(0, priors[3]);
 
+  item_scale ~ gamma(priors[4], priors[5]);
+  // item_L ~ lkj_corr_cholesky(priors[6]);
+  to_vector(item_mu_raw) ~ normal(0, 1);  // implies ~ normal(0, subject_scale)
+
   condition_omega ~ lkj_corr(priors[6]);
 
   theta_raw ~ normal(0, priors[7]);
@@ -103,4 +113,5 @@ model {
 generated quantities {
   real<lower=-1, upper=1> condition_rho = condition_omega[1,2]; // correlation to assemble
   vector[n_orders] theta = exp(theta_log);
+
 }
