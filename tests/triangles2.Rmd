@@ -6,26 +6,26 @@ output: html_document
 params:
   data_dir: data
   expt: CFSgonogo
-  model: "bivariate_probit_sim_nr"
-  flag: "single_rho-3_radius-30_radian-30"
-  reps: 1
+  model: "bivariate_probit_mixed_onec_mo_nonc"
+  flag: "rep-5_rho-3_sub-10-20-30_radius-3-radian-3"
+  reps: 5
   n_condition: 3
-  condition_rho: !r seq(from = -0.5, to = 0.5, length.out = 3) 
-  n_subject: 1
-  n_item: 1
+  condition_rho: !r seq(from = -0.75, to = 0.75, length.out = 3) 
+  n_subject: !r c(10,20,30)
+  n_item: 20
   type_model: !r c("mon", "nmon")
-  radius: !r seq(from = 0.5, to = 1.25, length.out = 30)
-  radian: !r seq(from = pi/16, to = pi/2.5, length.out = 30)
+  radius: !r seq(from = 0, to = 1, length.out = 3)
+  radian: !r seq(from = pi/6, to = pi/3, length.out = 3)
   base_length: 2
-  subject_scale: 0
-  item_scale: !r sqrt(0) # sqrt to remind that model will produce standard deviation
+  subject_scale: !r sqrt(0.25)
+  item_scale: !r sqrt(0.25) # sqrt to remind that model will produce standard deviation
   subject_rho: 0
   item_rho: 0
   chains: 6
   iter: 500
   warmup: 1000
   compile: 0
-  save_every: 1
+  save_every: 5
 ---
 
 ```{r setup, include=FALSE}
@@ -54,7 +54,7 @@ if (params$compile){
 
 
 ```{r}
-d <- gen_grand_data_triangle_nr(params, tau = 0)
+d <- gen_grand_data_triangle_nr(params)
 ```
 
 
@@ -81,21 +81,23 @@ d %>%
 
 ```{r}
 
-# d %>%
-#   filter(rep == 1) %>%
-#   mutate(radius_mid = factor(radius_mid),
-#          radian_mid = fct_rev(factor(round(radian_mid, digits = 2)))) %>%
-#   ggplot(aes(x=evidence_x, y=evidence_y, color = condition, shape = condition)) +
-#   # stat_ellipse(type = "norm", geom = "polygon", alpha = .2) +
-#   geom_point(alpha = 1 ) +
-#   coord_fixed() +
-#   facet_grid(condition_rho ~ radius_mid, labeller = "label_both") +
-#   scale_x_continuous() + # breaks  = c(-2, 0, 2), limits = c(-1.5, 1.5)
-#   scale_y_continuous() +
-#   geom_hline(yintercept = 0) +
-#   geom_vline(xintercept = 0) +
-#   theme_classic() +
-#   theme(strip.background = element_blank())
+d %>%
+  filter(radius_mid == 1) %>%
+  mutate(radius_mid = factor(radius_mid),
+         radian_mid = fct_rev(factor(round(radian_mid, digits = 2)))) %>%
+  ggplot(aes(x=evidence_x, y=evidence_y, color = condition, shape = condition)) +
+  stat_ellipse(type = "norm", geom = "polygon", alpha = .3) +
+  geom_point(alpha = .2 ) +
+  coord_fixed() +
+  facet_grid(condition_rho ~ radian_mid, labeller = "label_both") +
+  scale_x_continuous() + # breaks  = c(-2, 0, 2), limits = c(-1.5, 1.5)
+  scale_y_continuous() +
+  geom_hline(yintercept = 0) +
+  geom_vline(xintercept = 0) +
+  theme_classic() +
+  theme(strip.background = element_blank()) 
+# +
+#   ggsave("expt_probit_spread_radius-p1.png")
 
 ```
 
@@ -131,11 +133,12 @@ d_fit <- readr::read_rds(path = file.path(devtools::package_file(), "output", "s
 
 
 # although only small batches of post are filled at once, it needs to play nicely with the indexing variable in the for loop (i.e., post can't simply be params$save_every length). also, need to delete periodically because takes up too much RAM
-post <- vector(mode = "list", length = nrow(d_fit))    
+post <- vector(mode = "list", length = params$save_every)    
 
-for(m in 1901:nrow(d_fit)){
+iter <- 1
+for(m in 11:nrow(d_fit)){
   model <- stan_model(file.path(devtools::package_file(), "stan", paste0(params$model, ".stan")))
-  post[[m]] <- sampling(model,
+  post[[iter]] <- sampling(model,
                         data = d_fit$stan_data[[m]],
                         iter = params$warmup + params$iter,
                         warmup = params$warmup,
@@ -147,10 +150,12 @@ for(m in 1901:nrow(d_fit)){
   )
   
   if ((mod(m, params$save_every) == 0) || (m==nrow(d_fit))){
-    post2 <- post[(1 + m-params$save_every):m]
+    post2 <- post
     readr::write_rds(x = post2, path = file.path(devtools::package_file(), "output", "stan_samples", params$model, params$flag, glue::glue("post-{sprintf('%05d',m)}.rds")))
-    # rm(post)
-    # post <- vector(mode = "list", length = nrow(d_fit))
+    post <- vector(mode = "list", length = params$save_every)    
+    iter <- 1
+  }else{
+    iter <- iter + 1
   }
   
   loaded_dlls = getLoadedDLLs()
