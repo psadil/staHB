@@ -38,7 +38,7 @@ gen_X <- function(d, type, n_conditions=4, degree="max"){
   order_X <- gen_orders(n_conditions) %>%
     trim_orders(., degree = degree)
 
-  if (type=="nmon"){
+  if (type=="full"){
     if(n_conditions == 4){
       order_X <- abind::abind(order_X, order_X, along=1) %>%
         abind::abind(., .[c(1,2,4,3),], along=3)
@@ -48,6 +48,8 @@ gen_X <- function(d, type, n_conditions=4, degree="max"){
     }
   }else if(type=="mon"){
     order_X <- abind::abind(order_X, order_X, along=3)
+  }else if(type == "nmon"){
+    order_X <- abind::abind(order_X, order_X[c(2,1),], along=3)
   }
 
   # careful! the default coding scheme for ordered factor is polynomial contrasts!
