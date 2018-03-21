@@ -1,5 +1,5 @@
 Bootstrap:docker
-From:psadil/staHB:latest
+From:psadil/stahb:latest
 
 %labels
     VERSION 0.0.1
