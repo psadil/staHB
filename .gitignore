@@ -2,3 +2,7 @@
 .Rhistory
 .RData
 *.rds
+
+output*
+*.png
+*.pdf
