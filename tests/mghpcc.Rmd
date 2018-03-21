@@ -1,0 +1,123 @@
+---
+title: "triangles"
+author: "pss"
+date: "February 26, 2018"
+output: html_document
+params:
+  data_dir: data
+  expt: CFSgonogo
+  model: "bivariate_probit_mixed_onec_mo_nonc"
+  flag: "mghpcc-dev"
+  reps: 1
+  n_condition: 3
+  condition_rho: !r seq(from = -0.75, to = 0.75, length.out = 3) 
+  n_subject: !r c(30)
+  n_item: 20
+  type_model: !r c("full")
+  radius: !r seq(from = 0, to = 1, length.out = 1)
+  radian: !r seq(from = pi/6, to = pi/3, length.out = 1)
+  chains: 6
+  iter: 500
+  warmup: 1000
+  compile: 0
+  n_workers: 3
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, root.dir = devtools::package_file(), message = FALSE, warning = FALSE, fig.width = 7, fig.asp = 1, fig.path = paste0(file.path(devtools::package_file(), "output", "figures", params$model, params$flag), .Platform$file.sep) )
+
+devtools::load_all()
+
+dir.model <- file.path(dir.stan_samples, params$model)
+if (!dir.exists(dir.model)){
+  dir.create(dir.model)
+}
+dir.model_flag <- file.path(dir.model, params$flag)
+if (!dir.exists(dir.model_flag)){
+  dir.create(dir.model_flag)
+}
+
+options(mc.cores = params$chains)
+rstan::rstan_options("auto_write" = TRUE)
+
+if (params$compile){
+  rstan::stan_model(file.path(devtools::package_file(), "stan", paste0(params$model, ".stan")))
+}
+
+
+```
+
+
+
+```{r}
+
+wf_data <- drake_plan(data = gen_dataset(n_item = N__ITEM, 
+                                    n_subject = N__SUBJECT, 
+                                    condition_rho = CONDITION__RHO, 
+                                    radian_mid = RADIAN, 
+                                    radius_mid = RADIUS)) %>%
+  evaluate_plan(., rules = list(N__ITEM = params$n_item,
+                                N__SUBJECT = params$n_subject,
+                                CONDITION__RHO = params$condition_rho,
+                                RADIAN = params$radian,
+                                RADIUS = params$radius)) %>%
+  expand_plan(., values = stringr::str_c("rep", 1:params$reps))
+
+
+
+wf_apply_type <- drake_plan(data_typed = apply_type(dataset__, model_type = "MODEL_TYPE"), strings_in_dots = "literals") %>%
+  evaluate_plan(plan = ., rules = list(dataset__ = wf_data$target, MODEL_TYPE = params$type_model)) 
+
+wf_stan_data <- drake_plan(stan_data = gen_stan_data(dataset__)) %>%
+  plan_analyses(plan = ., datasets = wf_apply_type) 
+
+stan_data_reduce <- gather_plan(wf_stan_data, target = "stan_data", gather = "list")
+typed_reduce <- gather_plan(wf_apply_type, target = "typed_d", gather = "list")
+
+
+```
+
+
+
+```{r}
+
+wf_stan <- drake_plan(post = run_stan(dataset__)) %>%
+  plan_analyses(plan = ., datasets = wf_stan_data) 
+
+wf_waic <- drake_plan(waic1 = get_waic(post = POST)) %>%
+  evaluate_plan(plan = ., rules = list(POST = wf_stan$target))
+
+reduce_waic <- gather_plan(wf_waic, target = "waic", gather = "list")
+
+
+assemble_d <- drake_plan(d = collect_d(d = dataset__, stan_data=STAN_DATA, waic = WAIC)) %>%
+  evaluate_plan(plan = ., rules = list(dataset__ = typed_reduce$target,
+                                       STAN_DATA = stan_data_reduce$target,
+                                       WAIC = reduce_waic$target))
+
+```
+
+
+
+```{r}
+
+wf_plan <- rbind(wf_data, wf_apply_type, wf_stan_data, stan_data_reduce, typed_reduce, wf_stan, wf_waic, reduce_waic, assemble_d)
+
+con <- drake::drake_config(wf_plan)
+
+
+future::plan(
+  future.batchtools::batchtools_lsf,
+  template = "lsf.tmpl",
+  workers = params$n_workers
+)
+
+```
+
+```{r}
+
+drake::make(wf_plan, parallelism = "future_lapply")
+
+```
+
+

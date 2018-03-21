@@ -10,7 +10,10 @@ Depends:
     tidyverse,
     Hmisc,
     stringdist,
-    drake
+    drake,
+    future.batchtools,
+    batchtools,
+    future
 License: What license is it under?
 Encoding: UTF-8
 LazyData: true
