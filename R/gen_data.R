@@ -1,3 +1,5 @@
+
+#' @export
 gen_dataset <- function(n_item, n_subject, n_condition = 3,
                         condition_rho, subject_scale = sqrt(.25), item_scale = sqrt(.25), subject_rho = 0, item_rho = 0,
                         radian_mid, radius_mid, theta2 = pi/4, base_length = 2,
@@ -37,7 +39,7 @@ gen_dataset <- function(n_item, n_subject, n_condition = 3,
   return(d)
 }
 
-
+#' @export
 r_mvn <- function(n=1, mu = matrix(c(0,0),nrow=1), tau = 1, rho = 0){
 
   center <- matrix(mu,nrow=2)
@@ -52,7 +54,7 @@ r_mvn <- function(n=1, mu = matrix(c(0,0),nrow=1), tau = 1, rho = 0){
   return(effect)
 }
 
-
+#' @export
 gen_stan_data <- function(d, degree="min", rho = NULL){
 
   stan_data <- d %>%

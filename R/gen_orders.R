@@ -24,6 +24,7 @@ trim_orders <- function(order_X, base_group=1, end_group=4, degree = "none"){
   return(out)
 }
 
+#' @export
 gen_X_one_order <- function(X1,X2){
   X <- abind::abind(as.matrix(X1),as.matrix(X2), along = 3)
   return(X)

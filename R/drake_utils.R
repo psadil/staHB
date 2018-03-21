@@ -1,3 +1,5 @@
+
+#' @export
 run_stan <- function(stan_data){
   pars <- c("theta_log", "theta_raw", "lps", "zeta_raw", "theta_raw","condition_mu_raw", "zeta",
             "Mu_unordered", "Mu_ordered",
@@ -31,12 +33,14 @@ run_stan <- function(stan_data){
   return(post)
 }
 
+#' @export
 apply_type <- function(d, model_type){
   d %<>% mutate(type = model_type)
 
   return(d)
 }
 
+#' @export
 collect_d <- function(d, stan_data, waic){
   d2 <- tibble(data = d,
                stan_data = stan_data,
@@ -45,7 +49,7 @@ collect_d <- function(d, stan_data, waic){
 }
 
 
-
+#' @export
 get_waic <- function(post){
   log_lik <- loo::extract_log_lik(post)
   w <- loo::waic(log_lik)
