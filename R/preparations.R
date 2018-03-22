@@ -55,7 +55,7 @@ setup_job <- function(parallelism = NULL){
               "subject_L", "item_L",
               "condition_omega")
 
-    options(mc.cores = params$chains)
+    # options(parallel::mc.cores = params$chains)
     # rstan::rstan_options("auto_write" = TRUE)
 
 
@@ -85,15 +85,15 @@ setup_job <- function(parallelism = NULL){
   }
 
   wf_data <- drake::drake_plan(data = gen_dataset(n_item = N__ITEM,
-                                           n_subject = N__SUBJECT,
-                                           condition_rho = CONDITION__RHO,
-                                           radian_mid = RADIAN,
-                                           radius_mid = RADIUS)) %>%
+                                                  n_subject = N__SUBJECT,
+                                                  condition_rho = CONDITION__RHO,
+                                                  radian_mid = RADIAN,
+                                                  radius_mid = RADIUS)) %>%
     drake::evaluate_plan(., rules = list(N__ITEM = params$n_item,
-                                  N__SUBJECT = params$n_subject,
-                                  CONDITION__RHO = params$condition_rho,
-                                  RADIAN = params$radian,
-                                  RADIUS = params$radius)) %>%
+                                         N__SUBJECT = params$n_subject,
+                                         CONDITION__RHO = params$condition_rho,
+                                         RADIAN = params$radian,
+                                         RADIUS = params$radius)) %>%
     drake::expand_plan(., values = stringr::str_c("rep", 1:params$reps))
 
 

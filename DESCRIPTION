@@ -5,14 +5,7 @@ Authors@R: person("Patrick", "Sadil", email = "psadil@gmail.com", role = c("aut"
 Description: What the package does (one paragraph).
 Depends:
     R (>= 3.4.0),
-    magrittr,
-    tidyverse,
     Hmisc,
-    stringdist,
-    drake,
-    future.batchtools,
-    batchtools,
-    future,
 		methods,
 		Rcpp (>= 0.12.16)
 License: What license is it under?
@@ -23,10 +16,18 @@ Imports:
     abind,
     Hmisc,
     modelr,
-    rstan,
     mvtnorm,
     stringdist,
-		rstantools (>= 1.4.0)
+		rstantools (>= 1.4.0),
+		rstan (>= 2.17.3),
+		gtools,
+		drake,
+    future.batchtools,
+    batchtools,
+    future,
+    magrittr,
+    stringdist,
+    tidyverse
 LinkingTo: StanHeaders (>= 2.17.2), rstan (>= 2.17.3), BH (>= 1.66.0.1), Rcpp (>= 0.12.16), RcppEigen (>= 0.3.3.4.0)
 SystemRequirements: GNU make, pandoc (>= 1.12.3), pandoc-citeproc
 NeedsCompilation: yes
