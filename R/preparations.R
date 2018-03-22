@@ -1,14 +1,5 @@
 
-
-#' @export
-prepare_long_run <- function(model = NULL){
-
-  if(!is.null(model)){
-    rstan::stan_model(file.path(devtools::package_file(), 'tests', model))
-  }
-
-}
-
+#' @useDynLib staHB, .registration = TRUE
 
 
 #' @export
@@ -43,12 +34,11 @@ setup_job <- function(parallelism = "future_lapply"){
               "condition_omega")
 
     options(mc.cores = params$chains)
-    rstan::rstan_options("auto_write" = TRUE)
+    # rstan::rstan_options("auto_write" = TRUE)
 
 
-    model <- stan_model(file.path(devtools::package_file(), "tests", paste0(params$model, ".stan")))
 
-    post <- sampling(model,
+    post <- sampling(stanmodels$bivariate_probit_mixed_onec_mo_nonc,
                      data = stan_data,
                      iter = params$warmup + params$iter,
                      warmup = params$warmup,
