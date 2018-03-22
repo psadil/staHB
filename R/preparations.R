@@ -1,9 +1,9 @@
 
 
 #' @export
-test_model <- function(){
+test_model <- function(cores = 1){
 
-  options(mc.cores = 1)
+  options(mc.cores = cores)
 
   data <- gen_dataset(n_item = 20,
                       n_subject = 20,
@@ -17,7 +17,7 @@ test_model <- function(){
                    data = stan_data,
                    iter = 20,
                    warmup = 10,
-                   chains = 1
+                   chains = cores
                    , init_r = 0.25
                    , control = list(adapt_delta = .99)
   )
