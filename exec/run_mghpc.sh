@@ -1,5 +1,3 @@
 #!/bin/sh
 
-Rscript -e "rstan::stan_model(file.path(devtools::package_file(), 'stan', 'bivariate_probit_mixed_onec_mo_nonc.stan'))"
-
-Rscript -e "rmarkdown::render('mghpcc.Rmd', params = list(n_workers = 3))"
+Rscript -e "library(staHB); prepare_long_run('bivariate_probit_mixed_onec_mo_nonc'); setup_job('future_lapply')"

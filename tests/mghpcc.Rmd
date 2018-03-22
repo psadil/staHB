@@ -21,11 +21,11 @@ params:
   warmup: 1000
   compile: 0
   n_workers: 3
+  parallelism: !r drake::default_parallelism()
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE, root.dir = devtools::package_file(), message = FALSE, warning = FALSE, fig.width = 7, fig.asp = 1, fig.path = paste0(file.path(devtools::package_file(), "output", "figures", params$model, params$flag), .Platform$file.sep) )
-
+knitr::opts_chunk$set(echo = FALSE)
 
 ```
 
@@ -45,7 +45,7 @@ run_stan <- function(stan_data){
   rstan::rstan_options("auto_write" = TRUE)
   
 
-  model <- stan_model(file.path(devtools::package_file(), "stan", paste0(params$model, ".stan")))
+  model <- stan_model(file.path(devtools::package_file(), "tests", paste0(params$model, ".stan")))
 
   post <- sampling(model,
                    data = stan_data,
@@ -130,18 +130,19 @@ wf_plan <- rbind(wf_data, wf_apply_type, wf_stan_data, stan_data_reduce, typed_r
 
 con <- drake::drake_config(wf_plan)
 
-
-future::plan(
-  future.batchtools::batchtools_lsf,
-  template = file.path(devtools::package_file(),"tests", "lsf.tmpl"),
-  workers = params$n_workers
-)
+if(params$parallelism == "future_lapply"){
+  future::plan(
+    future.batchtools::batchtools_lsf,
+    template = file.path(devtools::package_file(),"tests", "lsf.tmpl"),
+    workers = params$n_workers
+  )
+}
 
 ```
 
 ```{r}
 
-drake::make(wf_plan, parallelism = "future_lapply")
+drake::make(wf_plan, parallelism = params$parallelism)
 
 ```
 
