@@ -3,7 +3,7 @@
 #' @export
 prepare_long_run <- function(model = NULL){
 
-  if(~is.null(model)){
+  if(!is.null(model)){
     rstan::stan_model(file.path(devtools::package_file(), 'tests', model))
   }
 
