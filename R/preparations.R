@@ -6,10 +6,10 @@ test_model <- function(){
   options(mc.cores = 1)
 
   data <- gen_dataset(n_item = 20,
-                     n_subject = 20,
-                     condition_rho = 0,
-                     radian_mid = 0,
-                     radius_mid = 0)
+                      n_subject = 20,
+                      condition_rho = 0,
+                      radian_mid = 0,
+                      radius_mid = 0)
   data_typed <- apply_type(data, model_type = "full")
   stan_data <- gen_stan_data(data_typed)
 
@@ -25,7 +25,7 @@ test_model <- function(){
 
 
 #' @export
-setup_job <- function(parallelism = "future_lapply"){
+setup_job <- function(parallelism = NULL){
 
 
   params <- list(data_dir= "data",
@@ -84,46 +84,63 @@ setup_job <- function(parallelism = "future_lapply"){
     return(post)
   }
 
-  wf_data <- drake_plan(data = gen_dataset(n_item = N__ITEM,
+  wf_data <- drake::drake_plan(data = gen_dataset(n_item = N__ITEM,
                                            n_subject = N__SUBJECT,
                                            condition_rho = CONDITION__RHO,
                                            radian_mid = RADIAN,
                                            radius_mid = RADIUS)) %>%
-    evaluate_plan(., rules = list(N__ITEM = params$n_item,
+    drake::evaluate_plan(., rules = list(N__ITEM = params$n_item,
                                   N__SUBJECT = params$n_subject,
                                   CONDITION__RHO = params$condition_rho,
                                   RADIAN = params$radian,
                                   RADIUS = params$radius)) %>%
-    expand_plan(., values = stringr::str_c("rep", 1:params$reps))
+    drake::expand_plan(., values = stringr::str_c("rep", 1:params$reps))
 
 
 
-  wf_apply_type <- drake_plan(data_typed = apply_type(dataset__, model_type = "MODEL_TYPE"), strings_in_dots = "literals") %>%
+  wf_apply_type <- drake::drake_plan(data_typed = apply_type(dataset__, model_type = "MODEL_TYPE"), strings_in_dots = "literals") %>%
     evaluate_plan(plan = ., rules = list(dataset__ = wf_data$target, MODEL_TYPE = params$type_model))
 
-  wf_stan_data <- drake_plan(stan_data = gen_stan_data(dataset__)) %>%
+  wf_stan_data <- drake::drake_plan(stan_data = gen_stan_data(dataset__)) %>%
     plan_analyses(plan = ., datasets = wf_apply_type)
 
-  stan_data_reduce <- gather_plan(wf_stan_data, target = "stan_data", gather = "list")
+  stan_data_reduce <- drake::gather_plan(wf_stan_data, target = "stan_data", gather = "list")
   typed_reduce <- gather_plan(wf_apply_type, target = "typed_d", gather = "list")
 
 
+  wf_stan <- drake_plan(post = run_stan(dataset__)) %>%
+    plan_analyses(plan = ., datasets = wf_stan_data)
 
-  wf_plan <- rbind(wf_data, wf_apply_type, wf_stan_data, stan_data_reduce, typed_reduce, wf_stan, wf_waic, reduce_waic, assemble_d)
+  wf_waic <- drake_plan(waic1 = get_waic(post = POST)) %>%
+    evaluate_plan(plan = ., rules = list(POST = wf_stan$target))
+
+  reduce_waic <- gather_plan(wf_waic, target = "waic", gather = "list")
+
+
+  assemble_d <- drake_plan(d = collect_d(d = dataset__, stan_data=STAN_DATA, waic = WAIC)) %>%
+    evaluate_plan(plan = ., rules = list(dataset__ = typed_reduce$target,
+                                         STAN_DATA = stan_data_reduce$target,
+                                         WAIC = reduce_waic$target))
+
+
+  wf_plan <- rbind(wf_data, wf_apply_type, wf_stan_data, stan_data_reduce,
+                   typed_reduce, wf_stan, wf_waic, reduce_waic, assemble_d)
 
   con <- drake::drake_config(wf_plan)
 
-  if(parallelism == "future_lapply"){
+  if(is.null(parallelism)){
+    drake::make(wf_plan)
+  }else if(parallelism == "future_lapply"){
     future::plan(
       future.batchtools::batchtools_lsf,
       template = file.path(devtools::package_file(),"tests", "lsf.tmpl"),
       workers = params$n_workers
     )
+    drake::make(wf_plan, parallelism = parallelism)
   }
 
-
-  drake::make(wf_plan, parallelism = parallelism)
 }
+
 
 
 

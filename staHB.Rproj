@@ -9,13 +9,14 @@ UseSpacesForTab: Yes
 NumSpacesForTab: 2
 Encoding: UTF-8
 
-RnwWeave: Sweave
+RnwWeave: knitr
 LaTeX: pdfLaTeX
 
 AutoAppendNewline: Yes
 StripTrailingWhitespace: Yes
 
 BuildType: Package
-PackageUseDevtools: Yes
-PackageInstallArgs: --no-multiarch --with-keep.source
+PackageInstallArgs: --no-multiarch --with-keep.source --preclean
+PackageBuildArgs: --preclean --no-build-vignettes
+PackageBuildBinaryArgs: --preclean
 PackageRoxygenize: rd,collate,namespace
