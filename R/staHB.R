@@ -11,6 +11,8 @@
 #' @import rstan
 #' @import tidyverse
 #'
+#' @useDynLib staHB, .registration = TRUE
+#'
 #' @docType package
 #' @name staHB
 NULL

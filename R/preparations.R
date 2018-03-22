@@ -1,5 +1,4 @@
 
-#' @useDynLib staHB, .registration = TRUE
 
 
 #' @export
@@ -34,7 +33,7 @@ setup_job <- function(parallelism = "future_lapply"){
               "condition_omega")
 
     options(mc.cores = params$chains)
-    # rstan::rstan_options("auto_write" = TRUE)
+    rstan::rstan_options("auto_write" = TRUE)
 
 
 
