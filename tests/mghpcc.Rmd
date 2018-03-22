@@ -33,6 +33,8 @@ rstan::rstan_options("auto_write" = TRUE)
 ```
 
 
+
+
 ```{r}
 
 run_stan <- function(stan_data){
