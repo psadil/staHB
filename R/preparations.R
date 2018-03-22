@@ -3,7 +3,7 @@
 #' @export
 test_model <- function(){
 
-  options(mc.cores = 2)
+  options(mc.cores = 1)
 
   data <- gen_dataset(n_item = 20,
                      n_subject = 20,
@@ -17,8 +17,7 @@ test_model <- function(){
                    data = stan_data,
                    iter = 20,
                    warmup = 10,
-                   chains = 2
-                   , include = FALSE
+                   chains = 1
                    , init_r = 0.25
                    , control = list(adapt_delta = .99)
   )
