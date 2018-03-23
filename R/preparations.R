@@ -54,30 +54,27 @@ setup_job <- function(parallelism = NULL){
               "subject_L", "item_L",
               "condition_omega")
 
-    # options(parallel::mc.cores = params$chains)
-    # rstan::rstan_options("auto_write" = TRUE)
-
-
 
     post <- rstan::sampling(stanmodels$bivariate_probit_mixed_onec_mo_nonc,
                             data = stan_data,
                             iter = params$warmup + params$iter,
                             warmup = params$warmup,
                             chains = params$chains
+                            , cores = params$chains
                             , pars = pars
                             , include = FALSE
                             , init_r = 0.25
                             , control = list(adapt_delta = .99)
     )
 
-    loaded_dlls = getLoadedDLLs()
-    loaded_dlls = loaded_dlls[str_detect(names(loaded_dlls), '^file')]
-    if (length(loaded_dlls) > 10) {
-      for (dll in head(loaded_dlls, -10)) {
-        message("Unloading DLL ", dll[['name']], ": ", dll[['path']])
-        dyn.unload(dll[['path']])
-      }
-    }
+    # loaded_dlls = getLoadedDLLs()
+    # loaded_dlls = loaded_dlls[str_detect(names(loaded_dlls), '^file')]
+    # if (length(loaded_dlls) > 10) {
+    #   for (dll in head(loaded_dlls, -10)) {
+    #     message("Unloading DLL ", dll[['name']], ": ", dll[['path']])
+    #     dyn.unload(dll[['path']])
+    #   }
+    # }
 
 
     return(post)
@@ -108,7 +105,7 @@ setup_job <- function(parallelism = NULL){
 
 
   wf_stan <- drake::drake_plan(post = run_stan(dataset__)) %>%
-    drae::plan_analyses(plan = ., datasets = wf_stan_data)
+    drake::plan_analyses(plan = ., datasets = wf_stan_data)
 
   wf_waic <- drake::drake_plan(waic1 = get_waic(post = POST)) %>%
     drake::evaluate_plan(plan = ., rules = list(POST = wf_stan$target))

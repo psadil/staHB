@@ -73,7 +73,7 @@ gen_stan_data <- function(d, degree="min", rho = NULL){
   stan_data$X <- gen_X(d, type = unique(d$type), n_conditions = n_conditions, degree = degree)
   stan_data$n_orders <- dim(stan_data$X)[1]
 
-  if(not(is.null(rho))){
+  if(!(is.null(rho))){
     stan_data$condition_omega <- matrix(c(1, rho, rho,1), nrow=2)
   }
 

@@ -6,10 +6,8 @@
 #' @section Foo functions:
 #' The foo functions ...
 #'
-#' @import Hmisc
-#' @import magrittr
-#' @import rstan
-#' @import tidyverse
+#' @import Rcpp
+#' @import methods
 #'
 #' @useDynLib staHB, .registration = TRUE
 #'

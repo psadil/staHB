@@ -1,7 +1,6 @@
 
 #' @export
 gen_orders <- function(n_conditions){
-  library(magrittr)
   out <- gtools::permutations(n_conditions, n_conditions, v=1:n_conditions) %>%
     tibble::as_tibble()
   return(out)

@@ -5,7 +5,6 @@ Authors@R: person("Patrick", "Sadil", email = "psadil@gmail.com", role = c("aut"
 Description: What the package does (one paragraph).
 Depends:
     R (>= 3.4.0),
-    Hmisc,
 		methods,
 		Rcpp (>= 0.12.16)
 License: What license is it under?
@@ -26,9 +25,25 @@ Imports:
     batchtools,
     future,
     magrittr,
-    stringdist,
-    tidyverse
-LinkingTo: StanHeaders (>= 2.17.2), rstan (>= 2.17.3), BH (>= 1.66.0.1), Rcpp (>= 0.12.16), RcppEigen (>= 0.3.3.4.0)
+    loo (>= 1.1.0),
+    parallel,
+    rmarkdown,
+    devtools,
+    dplyr,
+    purrr,
+    stringr,
+    tibble,
+    tidybayes,
+    tidyr,
+    inline,
+    stats
+LinkingTo: 
+    StanHeaders (>= 2.17.2), 
+    rstan (>= 2.17.3), 
+    BH (>= 1.66.0.1), 
+    Rcpp (>= 0.12.16), 
+    RcppEigen (>= 0.3.3.4.0), 
+    magrittr
 SystemRequirements: GNU make, pandoc (>= 1.12.3), pandoc-citeproc
-NeedsCompilation: yes
+NeedsCompilation: no
 RoxygenNote: 6.0.1
