@@ -2,14 +2,14 @@
 
 #' @export
 apply_type <- function(d, model_type){
-  d %<>% mutate(type = model_type)
+  d %<>% dplyr::mutate(type = model_type)
 
   return(d)
 }
 
 #' @export
 collect_d <- function(d, stan_data, waic){
-  d2 <- tibble(data = d,
+  d2 <- tibble::tibble(data = d,
                stan_data = stan_data,
                waic = waic)
   return(d2)

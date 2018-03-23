@@ -14,11 +14,11 @@ trim_orders <- function(order_X, base_group=1, end_group=4, degree = "none"){
     out <- order_X
   }else if(degree == "min"){
     out <- order_X %>%
-      filter(V1 == base_group)
+      dplyr::filter(V1 == base_group)
   }else if(degree == "max"){
     out <- order_X %>%
-      filter(V1 == base_group) %>%
-      filter(V4 == end_group)
+      dplyr::filter(V1 == base_group) %>%
+      dplyr::filter(V4 == end_group)
   }
 
   return(out)
@@ -57,10 +57,10 @@ gen_X <- function(d, type, n_conditions=4, degree="max"){
   # also, default coding scheme for unordered factor (contr.treatment) are not orthogonal to intercept
   for(order in 1:dim(order_X)[1]){
     X1 <- d %>%
-      mutate(condition_tmp = factor(condition, levels = order_X[order,,1], ordered = TRUE)) %>%
+      dplyr::mutate(condition_tmp = factor(condition, levels = order_X[order,,1], ordered = TRUE)) %>%
       modelr::model_matrix(., ~ condition_tmp, contrasts = list(condition_tmp = "contr.treatment"))
     X2 <- d %>%
-      mutate(condition_tmp = factor(condition, levels = order_X[order,,2], ordered = TRUE)) %>%
+      dplyr::mutate(condition_tmp = factor(condition, levels = order_X[order,,2], ordered = TRUE)) %>%
       modelr::model_matrix(., ~ condition_tmp, contrasts = list(condition_tmp = "contr.treatment"))
     if(order==1){
       X <- gen_X_one_order(X1,X2)
