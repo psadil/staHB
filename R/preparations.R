@@ -1,5 +1,3 @@
-
-
 #' @export
 test_model <- function(cores = getOption("mc.cores", 1L)){
 
@@ -24,7 +22,7 @@ test_model <- function(cores = getOption("mc.cores", 1L)){
 
 
 #' @export
-setup_job <- function(parallelism = NULL){
+setup_job <- function(jobs = 1, parallelism = drake::default_parallelism()){
 
 
   params <- list(data_dir= "data",
@@ -66,15 +64,6 @@ setup_job <- function(parallelism = NULL){
                             , init_r = 0.25
                             , control = list(adapt_delta = .99)
     )
-
-    # loaded_dlls = getLoadedDLLs()
-    # loaded_dlls = loaded_dlls[str_detect(names(loaded_dlls), '^file')]
-    # if (length(loaded_dlls) > 10) {
-    #   for (dll in head(loaded_dlls, -10)) {
-    #     message("Unloading DLL ", dll[['name']], ": ", dll[['path']])
-    #     dyn.unload(dll[['path']])
-    #   }
-    # }
 
 
     return(post)
@@ -124,16 +113,7 @@ setup_job <- function(parallelism = NULL){
 
   con <- drake::drake_config(wf_plan)
 
-  if(is.null(parallelism)){
-    drake::make(wf_plan)
-  }else if(parallelism == "future_lapply"){
-    future::plan(
-      future.batchtools::batchtools_lsf,
-      template = file.path(devtools::package_file(),"tests", "lsf.tmpl"),
-      workers = params$n_workers
-    )
-    drake::make(wf_plan, parallelism = parallelism)
-  }
+  drake::make(wf_plan, jobs = jobs, parallelism = parallelisms)
 
 }
 
