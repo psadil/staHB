@@ -14,7 +14,7 @@ findMatches <- function(d, cutoff=3){
 
   # index of minimum distance from each potential target
   indsOfCloseEnoughTargets <- purrr::at_depth(distsOfAllTargets,.depth=2, min) %>%
-    map_int(., .f=function(x) ifelse(min(purrr::as_vector(x))<cutoff,
+    purrr::map_int(., .f=function(x) ifelse(min(purrr::as_vector(x))<cutoff,
                                      which.min(purrr::as_vector(x)),
                                      NA_integer_)) %>%
     purrr:as_vector(.)

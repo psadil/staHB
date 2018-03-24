@@ -46,7 +46,7 @@ r_mvn <- function(n=1, mu = matrix(c(0,0),nrow=1), tau = 1, rho = 0){
   Omega <- matrix(c(1,rho,rho,1),nrow = 2)
   L_Omega <- t(chol(Omega))
   tau_diag <- diag(tau,2)
-  error_raw <- rbind(rnorm(n),rnorm(n))
+  error_raw <- rbind(stats::rnorm(n), stats::rnorm(n))
   shift <- do.call("rbind", rep(list(center), n))
 
   effect <- t(shift + ( (tau_diag %*% L_Omega) %*% error_raw ))

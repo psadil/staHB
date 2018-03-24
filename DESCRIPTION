@@ -42,8 +42,7 @@ LinkingTo:
     rstan (>= 2.17.3), 
     BH (>= 1.66.0.1), 
     Rcpp (>= 0.12.16), 
-    RcppEigen (>= 0.3.3.4.0), 
-    magrittr
+    RcppEigen (>= 0.3.3.4.0)
 SystemRequirements: GNU make, pandoc (>= 1.12.3), pandoc-citeproc
 NeedsCompilation: no
 RoxygenNote: 6.0.1

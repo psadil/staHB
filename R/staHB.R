@@ -6,11 +6,12 @@
 #' @section Foo functions:
 #' The foo functions ...
 #'
-#' @import Rcpp
-#' @import methods
-#'
-#' @useDynLib staHB, .registration = TRUE
-#'
 #' @docType package
 #' @name staHB
+#' @useDynLib staHB, .registration = TRUE
+#'
+#' @import methods
+#' @import Rcpp
+#'
+#'
 NULL
