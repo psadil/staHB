@@ -1,5 +1,0 @@
-Bootstrap:docker
-From:psadil/stahb:latest
-
-%labels
-    VERSION 0.0.1
