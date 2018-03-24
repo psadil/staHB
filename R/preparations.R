@@ -22,27 +22,23 @@ test_model <- function(cores = getOption("mc.cores", 1L)){
 
 
 #' @export
-setup_job <- function(jobs = 1, parallelism = drake::default_parallelism()){
+setup_job <- function(jobs = 1, parallelism = drake::default_parallelism(), n_chains = 1){
 
-
-  params <- list(data_dir= "data",
-                 model= "bivariate_probit_mixed_onec_mo_nonc",
-                 flag= "mghpcc-dev",
-                 reps= 1,
-                 n_condition= 3,
-                 condition_rho= seq(from = -0.75, to = 0.75, length.out = 3),
-                 n_subject= c(30),
-                 n_item= 20,
-                 type_model= c("full"),
-                 radius= seq(from = 0, to = 1, length.out = 1),
-                 radian= seq(from = pi/6, to = pi/3, length.out = 1),
-                 chains= 6,
+  params <- list(data_dir = "data",
+                 model = "bivariate_probit_mixed_onec_mo_nonc",
+                 flag = "mghpcc-dev",
+                 reps = 1,
+                 n_condition = 3 ,
+                 condition_rho = seq(from = -0.75, to = 0.75, length.out = 3),
+                 n_subject = c(30),
+                 n_item = 20,
+                 type_model = c("full"),
+                 radius = seq(from = 0, to = 1, length.out = 1),
+                 radian = seq(from = pi/6, to = pi/3, length.out = 1),
+                 chains = n_chains,
                  iter= 500,
-                 warmup= 1000,
-                 compile= 0,
-                 n_workers= 3
+                 warmup= 1000
   )
-
 
 
   run_stan <- function(stan_data){
@@ -113,7 +109,7 @@ setup_job <- function(jobs = 1, parallelism = drake::default_parallelism()){
 
   con <- drake::drake_config(wf_plan)
 
-  drake::make(wf_plan, jobs = jobs, parallelism = parallelisms)
+  drake::make(wf_plan, jobs = jobs, parallelism = parallelism)
 
 }
 
