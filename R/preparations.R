@@ -55,7 +55,8 @@ setup_job <- function(jobs = 1, parallelism = drake::default_parallelism(), n_ch
   wf_stan <- drake::drake_plan(post = run_stan(dataset__
                                                , iter = iter
                                                , warmup = warmup
-                                               , chains = chains)) %>%
+                                               , chains = chains
+                                               , cores = cores)) %>%
     drake::plan_analyses(plan = ., datasets = wf_stan_data)
 
   wf_waic <- drake::drake_plan(waic1 = get_waic(post = POST)) %>%
@@ -81,7 +82,7 @@ setup_job <- function(jobs = 1, parallelism = drake::default_parallelism(), n_ch
 }
 
 #' @export
-run_stan <- function(stan_data, iter=1000, warmup=500, chains=1){
+run_stan <- function(stan_data, iter=1000, warmup=500, chains=1, cores=1){
 
   pars <- c("theta_log", "theta_raw", "lps", "zeta_raw", "theta_raw","condition_mu_raw", "zeta",
             "Mu_unordered", "Mu_ordered",
