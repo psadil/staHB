@@ -55,7 +55,7 @@ setup_job <- function(jobs = 1, parallelism = drake::default_parallelism(), n_ch
   wf_stan <- drake::drake_plan(post = run_stan(dataset__
                                                , iter = iter
                                                , warmup = warmup
-                                               , chains = chains)) %>%
+                                               , chains = n_chains)) %>%
     drake::plan_analyses(plan = ., datasets = wf_stan_data)
 
   wf_waic <- drake::drake_plan(waic1 = get_waic(post = POST)) %>%
