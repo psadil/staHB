@@ -1,7 +1,7 @@
 
 #' @export
 gen_dataset <- function(n_item, n_subject, n_condition = 3,
-                        condition_rho, subject_scale = sqrt(.25), item_scale = sqrt(.25), subject_rho = 0, item_rho = 0,
+                        condition_rho, subject_scale = sqrt(.09), item_scale = sqrt(.09), subject_rho = 0, item_rho = 0,
                         radian_mid, radius_mid, theta2 = pi/4, base_length = 2,
                         tau = 1){
 
@@ -65,7 +65,7 @@ gen_stan_data <- function(d, degree="min", rho = NULL){
     tidybayes::compose_data() %>%
     c(.,
       D = 2,
-      priors = list(c(1, 1, 1, 2, 1, 1, 1)),
+      priors = list(c(1, 1, 1, 2, 2, 1, 1)),
       y  = list(cbind(d$y1, d$y2))
     )
   n_conditions <- dplyr::n_distinct(d$condition)

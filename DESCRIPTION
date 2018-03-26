@@ -11,16 +11,16 @@ License: What license is it under?
 Encoding: UTF-8
 LazyData: true
 Suggests: testthat, roxygen2
-Imports:
+Imports: 
     abind,
     Hmisc,
     modelr,
     mvtnorm,
     stringdist,
-		rstantools (>= 1.4.0),
-		rstan (>= 2.17.3),
-		gtools,
-		drake,
+    rstantools (>= 1.4.0),
+    rstan (>= 2.17.3),
+    gtools,
+    drake,
     future.batchtools,
     batchtools,
     future,
@@ -36,7 +36,8 @@ Imports:
     tidybayes,
     tidyr,
     inline,
-    stats
+    stats,
+    rlang
 LinkingTo: 
     StanHeaders (>= 2.17.2), 
     rstan (>= 2.17.3), 

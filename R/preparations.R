@@ -15,8 +15,8 @@ test_model <- function(cores = getOption("mc.cores", 1L)){
                           warmup = 10,
                           chains = cores
                           , cores = cores
-                          , init_r = 0.25
-                          , control = list(adapt_delta = .99)
+                          , init_r = 0.25 # need tight initialization for moving around probits
+                          # , control = list(adapt_delta = .9)
   )
 }
 
@@ -97,8 +97,8 @@ run_stan <- function(stan_data, iter=1000, warmup=500, chains=1){
                           , cores = chains
                           , pars = pars
                           , include = FALSE
-                          , init_r = 0.25
-                          , control = list(adapt_delta = .99)
+                          , init_r = 0.25 # need tight initialization for moving around probits
+                          # , control = list(adapt_delta = .9)
   )
 
   return(post)

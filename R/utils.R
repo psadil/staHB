@@ -14,10 +14,10 @@ findMatches <- function(d, cutoff=3){
 
   # index of minimum distance from each potential target
   indsOfCloseEnoughTargets <- purrr::at_depth(distsOfAllTargets,.depth=2, min) %>%
-    purrr::map_int(., .f=function(x) ifelse(min(purrr::as_vector(x))<cutoff,
-                                     which.min(purrr::as_vector(x)),
-                                     NA_integer_)) %>%
-    purrr:as_vector(.)
+    purrr::map_int(.f=function(x) ifelse(min(purrr::as_vector(x))<cutoff,
+                                         which.min(purrr::as_vector(x)),
+                                         NA_integer_)) %>%
+    purrr::as_vector()
   return(indsOfCloseEnoughTargets)
 }
 
@@ -25,15 +25,15 @@ findMatches <- function(d, cutoff=3){
 #' @export
 countSwaps <- function(d, condition){
   sapply(X=d$potentialMatches, FUN=function(x) d[x, ]$condition==condition) %>%
-    unlist(.) %>%
-    sum(.)
+    unlist() %>%
+    sum()
 }
 
 #' @export
 listSwapConds <- function(d){
 
   sapply(X=d$potentialMatches, FUN=function(x) d[x, ]$condition) %>%
-    unlist(.)
+    unlist()
 }
 
 #' @export
@@ -41,7 +41,7 @@ nSwaps <- function(d,condition){
   purrr::map_int(d$condOfSwaps, .f=function(y)
     sum(equals(y,condition))
   ) %>%
-    purrr::as_vector(.)
+    purrr::as_vector()
 }
 
 

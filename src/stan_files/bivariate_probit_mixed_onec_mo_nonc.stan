@@ -59,7 +59,7 @@ transformed data{
 parameters{
   corr_matrix[D] condition_omega;
   vector[n_orders-1] theta_raw; // first value must be pinned for identifiability
-  matrix[n_condition-2, n_orders] zeta_raw; // -1 for intercept, -1 for simplex identification
+  matrix[n_condition-2, n_orders] zeta_raw[D]; // -1 for intercept, -1 for simplex identification
   row_vector[D] intercept;
   row_vector[D] condition_mu_raw; // basically forced to be positive by data
   vector<lower=0.0>[D] subject_scale; // Variance of subject-level effects
@@ -74,20 +74,26 @@ transformed parameters {
   matrix[n_orders, n] lps;
   vector[n] log_lik;
   matrix[n_condition, D] condition_mu_ordered[n_orders]; // condition effects on mean of latent
-  matrix[n_condition-1, n_orders] zeta = append_row(zeroes_order, zeta_raw);
-  vector[n_condition-1]  cumulative_sum_softmax_zeta[n_orders];
+  matrix[n_condition-1, n_orders] zeta[D]; // proportion of effect in each dimension
+  vector[n_condition-1]  cumulative_sum_softmax_zeta[D, n_orders];
   matrix[n_subject, D] subject_mu = (diag_pre_multiply(subject_scale, subject_L) * subject_mu_raw)';
   matrix[n_item, D] item_mu = (diag_pre_multiply(item_scale, item_L) * item_mu_raw)';
+
+  for (d in 1:D){
+		 zeta[d] = append_row(zeroes_order, zeta_raw[d]);
+	}
 
   // likelihood determined by mixture of possible orders
   // this would usually go in model block, but I want the log_lik for waic so
   // if put there I might need to calculate twice
   for(order in 1:n_orders){
-    cumulative_sum_softmax_zeta[order] = cumulative_sum( softmax( col( zeta, order)));
+		for(d in 1:D){
+			cumulative_sum_softmax_zeta[d, order] = cumulative_sum( softmax( col( zeta[d], order)));
+		}
 
     condition_mu_ordered[order] = append_row(intercept,
-      append_col(condition_mu_raw[1] * cumulative_sum_softmax_zeta[order],
-        condition_mu_raw[2] * cumulative_sum_softmax_zeta[order] ));
+      append_col(condition_mu_raw[1] * cumulative_sum_softmax_zeta[1, order],
+        condition_mu_raw[2] * cumulative_sum_softmax_zeta[2, order] ));
 
     lps[order,] = theta_log[order] + biprobit_lpdf_vector(y,
       subject_mu[subject] + item_mu[item] + append_col(X[order,1] * condition_mu_ordered[order,, 1], X[order,2] * condition_mu_ordered[order,, 2]),
@@ -103,7 +109,9 @@ model {
   // priors
   intercept ~ normal(0, priors[1]); // need an intercept to allow mix of positive and negative mo effects
   condition_mu_raw ~ normal(0, priors[2]);
-  to_vector(zeta_raw) ~ normal(0, priors[3]);
+	for(d in 1:D){
+		to_vector(zeta_raw[d]) ~ normal(0, priors[3]);
+	}
 
   subject_scale ~ gamma(priors[4], priors[5]);
   subject_L ~ lkj_corr_cholesky(priors[6]);
