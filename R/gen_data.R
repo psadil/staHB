@@ -64,8 +64,8 @@ gen_stan_data <- function(d, degree="min", rho = NULL){
            subject = factor(subject)) %>%
     tidybayes::compose_data() %>%
     c(.,
-      D = 2,
-      priors = list(c(1, 1, 1, 2, 2, 1, 1)),
+      D = 2, # need high sd for softmax on zeta to enable both high prob of both effects being high
+      priors = list(c(1, 1, 3, 2, 2, 1, 3)),
       y  = list(cbind(d$y1, d$y2))
     )
   n_conditions <- dplyr::n_distinct(d$condition)

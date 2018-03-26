@@ -34,7 +34,7 @@ setup_job <- function(jobs = 1, parallelism = drake::default_parallelism(), n_ch
                                                   radius_mid = RADIUS)) %>%
     drake::evaluate_plan(., rules = list(N__ITEM = n_item,
                                          N__SUBJECT = n_subject,
-                                         CONDITION__RHO = seq(from = -0.75, to = 0.75, length.out = n_condition_rho),
+                                         CONDITION__RHO = seq(from = -0.5, to = 0.5, length.out = n_condition_rho),
                                          RADIAN = seq(from = pi/6, to = pi/3, length.out = n_radian),
                                          RADIUS = seq(from = 0, to = 1, length.out = n_radius))) %>%
     drake::expand_plan(., values = stringr::str_c("rep", 1:reps))
