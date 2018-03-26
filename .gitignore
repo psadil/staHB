@@ -11,9 +11,9 @@ exec/*.rda
 src/stan_files/*.o
 src/stan_files/*.cc
 src/stan_files/*.hpp
-src/rstanarm.so
-src/rstanarm.dll
+src/staHB.so
+src/staHB.dll
 src/init.o
 man/*.Rd
-!man/rstanarm-internal.Rd
 revdep/*
+
