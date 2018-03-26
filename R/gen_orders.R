@@ -31,12 +31,11 @@ gen_X_one_order <- function(X1,X2){
 
 
 #' @export
-gen_X <- function(d, type, n_conditions=4, degree="max"){
+gen_X <- function(d, type, n_conditions=3, degree="min"){
   # this is the main function for generating order-dependent design matrices
-  # currently only works with 4 conditions and max trim
 
   order_X <- gen_orders(n_conditions) %>%
-    trim_orders(., degree = degree)
+    trim_orders(., degree = degree, base_group = 1, end_group = n_conditions)
 
   if (type=="full"){
     if(n_conditions == 4){
