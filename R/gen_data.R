@@ -13,7 +13,8 @@ gen_dataset <- function(n_item, n_subject, n_condition = 3,
                 , condition = 1:n_condition) %>%
     dplyr::mutate(item = factor(item)
            , subject = factor(subject)
-           , condition = factor(condition)) %>%
+           , condition = factor(condition)
+           , condition_rho = condition_rho) %>%
     dplyr::mutate(radius = dplyr::case_when(condition == 1 ~ -base_length/2,
                               condition == 2 ~ radius_mid,
                               condition == 3 ~ base_length/2),
