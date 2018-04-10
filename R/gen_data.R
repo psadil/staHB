@@ -1,7 +1,7 @@
 
 #' @export
 gen_dataset <- function(n_item, n_subject, n_condition = 3,
-                        condition_rho, subject_scale = sqrt(.09), item_scale = sqrt(.09), subject_rho = 0, item_rho = 0,
+                        condition_rho, subject_scale = sqrt(.01), item_scale = sqrt(.01), subject_rho = 0, item_rho = 0,
                         radian_mid, radius_mid, theta2 = pi/4, base_length = 2,
                         tau = 1){
 
