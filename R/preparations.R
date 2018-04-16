@@ -24,7 +24,7 @@ test_model <- function(cores = getOption("mc.cores", 1L)){
 setup_job <- function(jobs = 1, parallelism = drake::default_parallelism(), n_chains = 1,
                       type_model = "full", reps = 1, n_condition_rho = 3,
                       n_subject = 20, n_item = 20, n_radius = 1, n_radian = 1,
-                      subject_scale = sqrt(.01), item_scale = sqrt(.01),
+                      subject_scale = sqrt(.09), item_scale = sqrt(.01), max_radius = 3,
                       iter = 500, warmup = 1000){
 
 
@@ -39,7 +39,7 @@ setup_job <- function(jobs = 1, parallelism = drake::default_parallelism(), n_ch
                                          N__SUBJECT = n_subject,
                                          CONDITION__RHO = seq(from = -0.5, to = 0.5, length.out = n_condition_rho),
                                          RADIAN = seq(from = pi/6, to = pi/3, length.out = n_radian),
-                                         RADIUS = seq(from = 0, to = 1, length.out = n_radius))) %>%
+                                         RADIUS = seq(from = 0, to = max_radius, length.out = n_radius))) %>%
     drake::expand_plan(., values = stringr::str_c("rep", 1:reps))
 
 
