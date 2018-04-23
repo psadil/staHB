@@ -1,0 +1,80 @@
+---
+title: "Vignette Title"
+author: "Vignette Author"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+
+options(mc.cores = params$chains)
+rstan::rstan_options("auto_write" = TRUE)
+
+data("d")
+```
+
+
+
+
+```{r}
+
+post <- d_post %>%
+  mutate(log_lik = map(post, ~loo::extract_log_lik(.x))) %>%
+  mutate(waic = map(log_lik, ~loo::waic(.x))) %>%
+  mutate(loo = map(log_lik, ~ loo::loo(.x)))
+
+
+loo::compare(extract2(post$waic,1),extract2(post$waic,2))
+```
+
+```{r}
+post_nmon <- readr::read_rds(path = file.path(devtools::package_file(), "output", "stan_samples", params$model, 'dev', "data_post.rds"))
+
+post_nmon <- post_nmon %>%
+  mutate(log_lik = map(post, ~loo::extract_log_lik(.x))) %>%
+  mutate(waic = map(log_lik, ~loo::waic(.x))) %>%
+  mutate(loo = map(log_lik, ~ loo::loo(.x)))
+
+loo::compare(extract2(post_nmon$waic,1),extract2(post_nmon$waic,2))
+```
+
+
+```{r}
+
+post <- tidybayes::gather_samples(estimated_model_mon,
+                                  condition_mu_ordered[order,question,condition]) %>%
+  ungroup()
+theta <- tidybayes::gather_samples(estimated_model_mon,
+                                   theta[order]) %>%
+  ungroup() %>%
+  mutate(order = factor(order))
+
+post %>%
+  mutate(condition = factor(condition)) %>%
+  ggplot(aes(x=condition, y = estimate)) +
+  geom_violin() +
+  facet_grid(order~question, labeller = "label_both")
+
+theta %>%
+  ggplot(aes(x=order, y=estimate)) +
+  geom_violin() 
+```
+
+
+```{r}
+library(loo)
+tmp_mon <- extract_log_lik(estimated_model_mon)
+tmp_Nmon <- extract_log_lik(estimated_model_Nmon)
+mon_waic <- loo::waic(tmp_mon)
+nmon_waic <- loo::waic(tmp_Nmon)
+loo::compare(mon_waic, nmon_waic)
+```
+

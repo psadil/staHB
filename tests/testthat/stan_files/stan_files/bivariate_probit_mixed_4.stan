@@ -61,7 +61,7 @@ parameters{
   vector[n_orders-1] theta_raw; // first value must be pinned for identifiability
   matrix[n_condition-2, n_orders] zeta_raw[D]; // -1 for intercept, -1 for simplex identification
   row_vector[D] intercept;
-  matrix[n_orders, D] condition_mu_raw; // basically forced to be positive by data
+  row_vector[D] condition_mu_raw; // basically forced to be positive by data
   vector<lower=0.0>[D] subject_scale; // Variance of subject-level effects
   matrix[D, n_subject] subject_mu_raw; // Subject-level coefficients for the bivariate normal means
   cholesky_factor_corr[D] subject_L;
@@ -92,8 +92,8 @@ transformed parameters {
 		}
 
     condition_mu_ordered[order] = append_row(intercept,
-      append_col(condition_mu_raw[order, 1] * cumulative_sum_softmax_zeta[1, order],
-        condition_mu_raw[order, 2] * cumulative_sum_softmax_zeta[2, order] ));
+      append_col(condition_mu_raw[1] * cumulative_sum_softmax_zeta[1, order],
+        condition_mu_raw[2] * cumulative_sum_softmax_zeta[2, order] ));
 
     lps[order,] = theta_log[order] + biprobit_lpdf_vector(y,
       subject_mu[subject] + item_mu[item] + append_col(X[order,1] * condition_mu_ordered[order,, 1], X[order,2] * condition_mu_ordered[order,, 2]),
@@ -108,7 +108,7 @@ model {
 
   // priors
   intercept ~ normal(0, priors[1]); // need an intercept to allow mix of positive and negative mo effects
-  to_vector(condition_mu_raw) ~ normal(0, priors[2]);
+  condition_mu_raw ~ normal(0, priors[2]);
 	for(d in 1:D){
 		to_vector(zeta_raw[d]) ~ normal(0, priors[3]);
 	}

@@ -5,15 +5,15 @@
 output*
 *.png
 *.pdf
-
 # from rstanarm
 exec/*.rda
 src/stan_files/*.o
 src/stan_files/*.cc
 src/stan_files/*.hpp
-src/staHB.so
-src/staHB.dll
+src/*.o
+src/*.so
+src/*.dll
 src/init.o
 man/*.Rd
 revdep/*
-
+inst/doc

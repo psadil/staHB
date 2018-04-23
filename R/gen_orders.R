@@ -34,8 +34,13 @@ gen_X_one_order <- function(X1,X2){
 gen_X <- function(d, type, n_conditions=3, degree="min"){
   # this is the main function for generating order-dependent design matrices
 
-  order_X <- gen_orders(n_conditions) %>%
-    trim_orders(., degree = degree, base_group = 1, end_group = n_conditions)
+  if (n_conditions == 3){
+    order_X <- gen_orders(n_conditions) %>%
+      trim_orders(., degree = degree, base_group = 1, end_group = n_conditions)
+  }else if(n_conditions == 4){
+    order_X <- gen_orders(n_conditions) %>%
+      trim_orders(., degree = "max", base_group = 1, end_group = n_conditions)
+  }
 
   if (type=="full"){
     if(n_conditions == 4){
@@ -46,9 +51,17 @@ gen_X <- function(d, type, n_conditions=3, degree="min"){
         abind::abind(., .[c(1,2,4,3),], along=3)
     }
   }else if(type=="mon"){
-    order_X <- abind::abind(order_X, order_X, along=3)
+    if(n_conditions == 4){
+      order_X <- abind::abind(order_X, order_X, along=3)
+    }else if(n_conditions == 3){
+      order_X <- abind::abind(order_X, order_X, along=3)
+    }
   }else if(type == "nmon"){
-    order_X <- abind::abind(order_X, order_X[c(2,1),], along=3)
+    if(n_conditions == 4){
+      order_X <- abind::abind(order_X, order_X[c(2,1),], along=3)
+    }else if(n_conditions == 3){
+      order_X <- abind::abind(order_X, order_X[c(2,1),], along=3)
+    }
   }
 
   # careful! the default coding scheme for ordered factor is polynomial contrasts!
