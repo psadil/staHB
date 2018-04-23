@@ -85,15 +85,20 @@ setup_job <- function(jobs = 1, parallelism = drake::default_parallelism(), n_ch
 }
 
 #' @export
-run_stan <- function(stan_data, iter=1000, warmup=500, chains=1){
+run_stan <- function(stan_data, iter=1000, warmup=500, chains=1, model =1){
 
   pars <- c("theta_log", "theta_raw", "lps", "zeta_raw", "theta_raw","condition_mu_raw", "zeta",
             "Mu_unordered", "Mu_ordered",
             "subject_mu_raw", "item_mu_raw", "subject_mu",
             "subject_L", "item_L",
             "condition_omega")
+  if(model == 1){
+    object <- stanmodels$bivariate_probit_mixed_onec_mo_nonc
+  }else if(model == 2){
+    object <- stanmodels$bivariate_probit_mixed_4
+  }
 
-  post <- rstan::sampling(stanmodels$bivariate_probit_mixed_onec_mo_nonc,
+  post <- rstan::sampling(object,
                           data = stan_data,
                           iter = warmup + iter,
                           warmup = warmup,

@@ -27,7 +27,7 @@ d <- readr::read_csv(file.path(raw_dir, 'data.csv')) %>%
 usethis::use_data(d, overwrite = TRUE)
 
 expt1_post <- d %>%
-  dplyr::mutate(post = purrr::map(stan_data, ~  run_stan(.x, iter=500, warmup=1000, chains=6)))
+  dplyr::mutate(post = purrr::map(stan_data, ~  run_stan(.x, iter=500, warmup=1000, chains=6, model=2)))
 
 usethis::use_data(expt1_post, overwrite = TRUE)
 

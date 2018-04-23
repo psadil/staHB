@@ -20,7 +20,7 @@
 
 #include <stan/model/model_header.hpp>
 
-namespace model_bivariate_probit_mixed_onec_mo_nonc_namespace {
+namespace model_bivariate_probit_mixed_4_namespace {
 
 using std::istream;
 using std::string;
@@ -39,8 +39,8 @@ static int current_statement_begin__;
 
 stan::io::program_reader prog_reader__() {
     stan::io::program_reader reader;
-    reader.add_event(0, 0, "start", "model_bivariate_probit_mixed_onec_mo_nonc");
-    reader.add_event(144, 144, "end", "model_bivariate_probit_mixed_onec_mo_nonc");
+    reader.add_event(0, 0, "start", "model_bivariate_probit_mixed_4");
+    reader.add_event(144, 144, "end", "model_bivariate_probit_mixed_4");
     return reader;
 }
 
@@ -239,7 +239,7 @@ struct biprobit_lpdf_vector_functor__ {
 };
 
 #include <meta_header.hpp>
- class model_bivariate_probit_mixed_onec_mo_nonc : public prob_grad {
+ class model_bivariate_probit_mixed_4 : public prob_grad {
 private:
     int n;
     int n_condition;
@@ -255,13 +255,13 @@ private:
     vector<vector<matrix_d> > X;
     row_vector_d zeroes_order;
 public:
-    model_bivariate_probit_mixed_onec_mo_nonc(stan::io::var_context& context__,
+    model_bivariate_probit_mixed_4(stan::io::var_context& context__,
         std::ostream* pstream__ = 0)
         : prob_grad(0) {
         ctor_body(context__, 0, pstream__);
     }
 
-    model_bivariate_probit_mixed_onec_mo_nonc(stan::io::var_context& context__,
+    model_bivariate_probit_mixed_4(stan::io::var_context& context__,
         unsigned int random_seed__,
         std::ostream* pstream__ = 0)
         : prob_grad(0) {
@@ -277,7 +277,7 @@ public:
 
         current_statement_begin__ = -1;
 
-        static const char* function__ = "model_bivariate_probit_mixed_onec_mo_nonc_namespace::model_bivariate_probit_mixed_onec_mo_nonc";
+        static const char* function__ = "model_bivariate_probit_mixed_4_namespace::model_bivariate_probit_mixed_4";
         (void) function__;  // dummy to suppress unused var warning
         size_t pos__;
         (void) pos__;  // dummy to suppress unused var warning
@@ -472,9 +472,8 @@ public:
         validate_non_negative_index("intercept", "D", D);
             num_params_r__ += D;
             current_statement_begin__ = 64;
-        validate_non_negative_index("condition_mu_raw", "n_orders", n_orders);
-            validate_non_negative_index("condition_mu_raw", "D", D);
-            num_params_r__ += n_orders * D;
+        validate_non_negative_index("condition_mu_raw", "D", D);
+            num_params_r__ += D;
             current_statement_begin__ = 65;
             validate_non_negative_index("subject_scale", "D", D);
             num_params_r__ += D;
@@ -502,7 +501,7 @@ public:
         }
     }
 
-    ~model_bivariate_probit_mixed_onec_mo_nonc() { }
+    ~model_bivariate_probit_mixed_4() { }
 
 
     void transform_inits(const stan::io::var_context& context__,
@@ -586,15 +585,13 @@ public:
             throw std::runtime_error("variable condition_mu_raw missing");
         vals_r__ = context__.vals_r("condition_mu_raw");
         pos__ = 0U;
-        validate_non_negative_index("condition_mu_raw", "n_orders", n_orders);
         validate_non_negative_index("condition_mu_raw", "D", D);
-        context__.validate_dims("initialization", "condition_mu_raw", "matrix_d", context__.to_vec(n_orders,D));
-        matrix_d condition_mu_raw(static_cast<Eigen::VectorXd::Index>(n_orders),static_cast<Eigen::VectorXd::Index>(D));
-        for (int j2__ = 0U; j2__ < D; ++j2__)
-            for (int j1__ = 0U; j1__ < n_orders; ++j1__)
-                condition_mu_raw(j1__,j2__) = vals_r__[pos__++];
+        context__.validate_dims("initialization", "condition_mu_raw", "row_vector_d", context__.to_vec(D));
+        row_vector_d condition_mu_raw(static_cast<Eigen::VectorXd::Index>(D));
+        for (int j1__ = 0U; j1__ < D; ++j1__)
+            condition_mu_raw(j1__) = vals_r__[pos__++];
         try {
-            writer__.matrix_unconstrain(condition_mu_raw);
+            writer__.row_vector_unconstrain(condition_mu_raw);
         } catch (const std::exception& e) { 
             throw std::runtime_error(std::string("Error transforming variable condition_mu_raw: ") + e.what());
         }
@@ -759,12 +756,12 @@ public:
             else
                 intercept = in__.row_vector_constrain(D);
 
-            Eigen::Matrix<T__,Eigen::Dynamic,Eigen::Dynamic>  condition_mu_raw;
+            Eigen::Matrix<T__,1,Eigen::Dynamic>  condition_mu_raw;
             (void) condition_mu_raw;  // dummy to suppress unused var warning
             if (jacobian__)
-                condition_mu_raw = in__.matrix_constrain(n_orders,D,lp__);
+                condition_mu_raw = in__.row_vector_constrain(D,lp__);
             else
-                condition_mu_raw = in__.matrix_constrain(n_orders,D);
+                condition_mu_raw = in__.row_vector_constrain(D);
 
             Eigen::Matrix<T__,Eigen::Dynamic,1>  subject_scale;
             (void) subject_scale;  // dummy to suppress unused var warning
@@ -890,7 +887,7 @@ public:
                     stan::math::assign(get_base1_lhs(get_base1_lhs(cumulative_sum_softmax_zeta,d,"cumulative_sum_softmax_zeta",1),order,"cumulative_sum_softmax_zeta",2), cumulative_sum(softmax(col(get_base1(zeta,d,"zeta",1),order))));
                 }
                 current_statement_begin__ = 94;
-                stan::math::assign(get_base1_lhs(condition_mu_ordered,order,"condition_mu_ordered",1), append_row(intercept,append_col(multiply(get_base1(condition_mu_raw,order,1,"condition_mu_raw",1),get_base1(get_base1(cumulative_sum_softmax_zeta,1,"cumulative_sum_softmax_zeta",1),order,"cumulative_sum_softmax_zeta",2)),multiply(get_base1(condition_mu_raw,order,2,"condition_mu_raw",1),get_base1(get_base1(cumulative_sum_softmax_zeta,2,"cumulative_sum_softmax_zeta",1),order,"cumulative_sum_softmax_zeta",2)))));
+                stan::math::assign(get_base1_lhs(condition_mu_ordered,order,"condition_mu_ordered",1), append_row(intercept,append_col(multiply(get_base1(condition_mu_raw,1,"condition_mu_raw",1),get_base1(get_base1(cumulative_sum_softmax_zeta,1,"cumulative_sum_softmax_zeta",1),order,"cumulative_sum_softmax_zeta",2)),multiply(get_base1(condition_mu_raw,2,"condition_mu_raw",1),get_base1(get_base1(cumulative_sum_softmax_zeta,2,"cumulative_sum_softmax_zeta",1),order,"cumulative_sum_softmax_zeta",2)))));
                 current_statement_begin__ = 98;
                 stan::model::assign(lps, 
                             stan::model::cons_list(stan::model::index_uni(order), stan::model::cons_list(stan::model::index_omni(), stan::model::nil_index_list())), 
@@ -996,7 +993,7 @@ public:
             current_statement_begin__ = 110;
             lp_accum__.add(normal_log<propto__>(intercept, 0, get_base1(priors,1,"priors",1)));
             current_statement_begin__ = 111;
-            lp_accum__.add(normal_log<propto__>(to_vector(condition_mu_raw), 0, get_base1(priors,2,"priors",1)));
+            lp_accum__.add(normal_log<propto__>(condition_mu_raw, 0, get_base1(priors,2,"priors",1)));
             current_statement_begin__ = 112;
             for (int d = 1; d <= D; ++d) {
 
@@ -1092,7 +1089,6 @@ public:
         dims__.push_back(D);
         dimss__.push_back(dims__);
         dims__.resize(0);
-        dims__.push_back(n_orders);
         dims__.push_back(D);
         dimss__.push_back(dims__);
         dims__.resize(0);
@@ -1171,7 +1167,7 @@ public:
                      std::ostream* pstream__ = 0) const {
         vars__.resize(0);
         stan::io::reader<double> in__(params_r__,params_i__);
-        static const char* function__ = "model_bivariate_probit_mixed_onec_mo_nonc_namespace::write_array";
+        static const char* function__ = "model_bivariate_probit_mixed_4_namespace::write_array";
         (void) function__;  // dummy to suppress unused var warning
         // read-transform, write parameters
         matrix_d condition_omega = in__.corr_matrix_constrain(D);
@@ -1182,7 +1178,7 @@ public:
             zeta_raw.push_back(in__.matrix_constrain((n_condition - 2),n_orders));
         }
         row_vector_d intercept = in__.row_vector_constrain(D);
-        matrix_d condition_mu_raw = in__.matrix_constrain(n_orders,D);
+        row_vector_d condition_mu_raw = in__.row_vector_constrain(D);
         vector_d subject_scale = in__.vector_lb_constrain(0.0,D);
         matrix_d subject_mu_raw = in__.matrix_constrain(D,n_subject);
         matrix_d subject_L = in__.cholesky_corr_constrain(D);
@@ -1207,10 +1203,8 @@ public:
             for (int k_0__ = 0; k_0__ < D; ++k_0__) {
             vars__.push_back(intercept[k_0__]);
             }
-            for (int k_1__ = 0; k_1__ < D; ++k_1__) {
-                for (int k_0__ = 0; k_0__ < n_orders; ++k_0__) {
-                vars__.push_back(condition_mu_raw(k_0__, k_1__));
-                }
+            for (int k_0__ = 0; k_0__ < D; ++k_0__) {
+            vars__.push_back(condition_mu_raw[k_0__]);
             }
             for (int k_0__ = 0; k_0__ < D; ++k_0__) {
             vars__.push_back(subject_scale[k_0__]);
@@ -1329,7 +1323,7 @@ public:
                     stan::math::assign(get_base1_lhs(get_base1_lhs(cumulative_sum_softmax_zeta,d,"cumulative_sum_softmax_zeta",1),order,"cumulative_sum_softmax_zeta",2), cumulative_sum(softmax(col(get_base1(zeta,d,"zeta",1),order))));
                 }
                 current_statement_begin__ = 94;
-                stan::math::assign(get_base1_lhs(condition_mu_ordered,order,"condition_mu_ordered",1), append_row(intercept,append_col(multiply(get_base1(condition_mu_raw,order,1,"condition_mu_raw",1),get_base1(get_base1(cumulative_sum_softmax_zeta,1,"cumulative_sum_softmax_zeta",1),order,"cumulative_sum_softmax_zeta",2)),multiply(get_base1(condition_mu_raw,order,2,"condition_mu_raw",1),get_base1(get_base1(cumulative_sum_softmax_zeta,2,"cumulative_sum_softmax_zeta",1),order,"cumulative_sum_softmax_zeta",2)))));
+                stan::math::assign(get_base1_lhs(condition_mu_ordered,order,"condition_mu_ordered",1), append_row(intercept,append_col(multiply(get_base1(condition_mu_raw,1,"condition_mu_raw",1),get_base1(get_base1(cumulative_sum_softmax_zeta,1,"cumulative_sum_softmax_zeta",1),order,"cumulative_sum_softmax_zeta",2)),multiply(get_base1(condition_mu_raw,2,"condition_mu_raw",1),get_base1(get_base1(cumulative_sum_softmax_zeta,2,"cumulative_sum_softmax_zeta",1),order,"cumulative_sum_softmax_zeta",2)))));
                 current_statement_begin__ = 98;
                 stan::model::assign(lps, 
                             stan::model::cons_list(stan::model::index_uni(order), stan::model::cons_list(stan::model::index_omni(), stan::model::nil_index_list())), 
@@ -1495,7 +1489,7 @@ public:
     }
 
     static std::string model_name() {
-        return "model_bivariate_probit_mixed_onec_mo_nonc";
+        return "model_bivariate_probit_mixed_4";
     }
 
 
@@ -1529,12 +1523,10 @@ public:
             param_name_stream__ << "intercept" << '.' << k_0__;
             param_names__.push_back(param_name_stream__.str());
         }
-        for (int k_1__ = 1; k_1__ <= D; ++k_1__) {
-            for (int k_0__ = 1; k_0__ <= n_orders; ++k_0__) {
-                param_name_stream__.str(std::string());
-                param_name_stream__ << "condition_mu_raw" << '.' << k_0__ << '.' << k_1__;
-                param_names__.push_back(param_name_stream__.str());
-            }
+        for (int k_0__ = 1; k_0__ <= D; ++k_0__) {
+            param_name_stream__.str(std::string());
+            param_name_stream__ << "condition_mu_raw" << '.' << k_0__;
+            param_names__.push_back(param_name_stream__.str());
         }
         for (int k_0__ = 1; k_0__ <= D; ++k_0__) {
             param_name_stream__.str(std::string());
@@ -1681,12 +1673,10 @@ public:
             param_name_stream__ << "intercept" << '.' << k_0__;
             param_names__.push_back(param_name_stream__.str());
         }
-        for (int k_1__ = 1; k_1__ <= D; ++k_1__) {
-            for (int k_0__ = 1; k_0__ <= n_orders; ++k_0__) {
-                param_name_stream__.str(std::string());
-                param_name_stream__ << "condition_mu_raw" << '.' << k_0__ << '.' << k_1__;
-                param_names__.push_back(param_name_stream__.str());
-            }
+        for (int k_0__ = 1; k_0__ <= D; ++k_0__) {
+            param_name_stream__.str(std::string());
+            param_name_stream__ << "condition_mu_raw" << '.' << k_0__;
+            param_names__.push_back(param_name_stream__.str());
         }
         for (int k_0__ = 1; k_0__ <= D; ++k_0__) {
             param_name_stream__.str(std::string());
@@ -1804,7 +1794,7 @@ public:
 
 }
 
-typedef model_bivariate_probit_mixed_onec_mo_nonc_namespace::model_bivariate_probit_mixed_onec_mo_nonc stan_model;
+typedef model_bivariate_probit_mixed_4_namespace::model_bivariate_probit_mixed_4 stan_model;
 
 
 #endif
