@@ -41,6 +41,39 @@ gen_dataset <- function(n_item, n_subject, n_condition = 3,
 }
 
 #' @export
+gen_dataset_cart <- function(n_item, n_subject, n_condition = 4, condition_x, condition_y,
+                             condition_rho, subject_scale = sqrt(.1), item_scale = sqrt(.1), subject_rho = 0, item_rho = 0,
+                             tau = 1){
+
+  # range between condition effects. used in determining std of item effects
+  d <- tidyr::crossing(item = 1:n_item
+                       , subject = 1:n_subject
+                       , condition = 1:n_condition) %>%
+    dplyr::mutate(item = factor(item)
+                  , subject = factor(subject)
+                  , x = condition_x[condition]
+                  , y = condition_y[condition]
+                  , condition = factor(condition)
+                  , condition_rho = condition_rho) %>%
+    dplyr::mutate(condition_mu = purrr::map2(x, y, ~cbind(.x, .y))) %>%
+    dplyr::mutate(subject_mu = purrr::map2(subject_scale, subject_rho, ~ r_mvn(n=1, tau = .x, rho = .y, mu=c(0,0))),
+                  item_mu = purrr::map2(item_scale, item_rho, ~ r_mvn(n=1, tau = .x, rho = .y, mu=c(0,0)))) %>%
+    dplyr::mutate(Mu = purrr::pmap(list(condition_mu, subject_mu, item_mu, condition_rho, tau),
+                                   function(a,b,c,d, e) r_mvn(n=1, mu = a + b + c, tau = e, rho = d) )) %>%
+    dplyr::mutate(evidence_x = purrr::map_dbl(Mu, ~purrr::pluck(.x, 1)),
+                  evidence_y = purrr::map_dbl(Mu, ~purrr::pluck(.x, 2))
+    ) %>%
+    dplyr::mutate(y_sim = purrr::map(Mu, ~dplyr::if_else(.x > 0, 1, 0))) %>%
+    dplyr::select(-Mu) %>%
+    dplyr::mutate(y1 = purrr::map_dbl(y_sim, ~purrr::pluck(.x, 1)),
+                  y2 = purrr::map_dbl(y_sim, ~purrr::pluck(.x, 2))
+    )
+
+  return(d)
+}
+
+
+#' @export
 r_mvn <- function(n=1, mu = matrix(c(0,0),nrow=1), tau = 1, rho = 0){
 
   center <- matrix(mu,nrow=2)

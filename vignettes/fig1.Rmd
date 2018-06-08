@@ -1,0 +1,84 @@
+---
+title: "Vignette Title"
+author: "Vignette Author"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+
+cbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+fmt_dcimals <- function(decimals=0){
+    function(x) format(x,nsmall = decimals,scientific = FALSE)
+}
+
+colmap <- c('Not Studied'=cbPalette[7]
+            ,'Word'=cbPalette[2]
+            ,'CFS'=cbPalette[3]
+            ,'Binocular'=cbPalette[4]
+)
+
+library(tidyverse)
+library(RColorBrewer)
+```
+
+
+```{r}
+ss <- seq(-1.25,1.25,length.out = 4)
+condition_x <- list(c(-1.25, -.125, .125, 1.25), c(-1.25, -.5, .5, 1.25), ss)
+condition_y <- list(c(-1.25, .375, -.625, 1.25),c(-1.25, .5, -.5, 1.25), c(ss[1],ss[3],ss[2],ss[4]))
+
+
+d <- tibble(condition = 1:4) %>%
+  crossing(Correlation = c(-.9,0,.9),
+           tau = .3,
+           X = seq(-2,2, length.out = 100),
+           Y = seq(-2,2, length.out = 100),
+           set = 1:3) %>%
+  mutate(mu = map2(condition,set, ~c(condition_x[[.y]][.x], condition_y[[.y]][.x]))) %>%
+  dplyr::mutate(dens = purrr::pmap_dbl(list(mu=mu, rho=Correlation, tau=tau, x=X, y=Y), 
+                                       function(mu, rho, tau, x, y) mvtnorm::dmvnorm(x=c(x,y), 
+                                                                                     mean = mu, 
+                                                                                     sigma = diag(tau,2) %*% matrix(c(1,rho,rho,1),nrow = 2)%*% diag(tau,2)) )) %>%
+  mutate(Correlation = factor(Correlation, levels = c(0,-.9,.9))) %>%
+  group_by(Correlation, tau, X, Y, set) %>%
+  nest() %>%
+  mutate(dens = map_dbl(data, ~ mean(.x$dens)))
+
+```
+
+
+```{r}
+
+d %>%
+  rename(`Condition Mean Set` = set) %>%
+  ggplot(aes(x=X,y=Y, z=dens)) +
+  geom_raster(aes(fill = dens)) + 
+  stat_contour(color = "black", bins = 4) +
+  facet_grid(`Condition Mean Set`~Correlation, labeller = "label_both") +
+  coord_fixed(xlim=c(-2,2),ylim=c(-2,2)) +
+  theme_classic() +
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        panel.background = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text = element_blank(),
+        axis.line = element_line(size=1)) +
+  # annotate("segment",x=-1.5,xend=1.5,y=Inf,yend=Inf,color="black",lwd=1.5) +
+  scale_fill_gradient2(low = "white", high = "red") +
+  # scale_fill_viridis(option="magma") +
+  ggsave("fig1.png")
+
+
+
+```
+

@@ -32,3 +32,22 @@ expt1_post <- d %>%
 usethis::use_data(expt1_post, overwrite = TRUE)
 
 
+expt1_post_rhos <- d %>%
+  dplyr::mutate(post = purrr::map(stan_data, ~  run_stan(.x, iter = 1000, warmup=1000, chains=6, model=3)))
+
+usethis::use_data(expt1_post_rhos, overwrite = TRUE)
+
+
+post1 <- expt1_post %>%
+  dplyr::mutate(log_lik = purrr::map(post, ~loo::extract_log_lik(.x, merge_chains = FALSE)),
+                r_eff = purrr::map(log_lik, ~loo::relative_eff(.x, cores=4))) %>%
+  dplyr::mutate(waic = purrr::map(log_lik, ~loo::waic(.x))) %>%
+  dplyr::mutate(loo = purrr::map2(log_lik, r_eff, ~ loo::loo(.x, r_eff = .y)))
+
+
+post <- expt1_post_rhos %>%
+  dplyr::mutate(log_lik = purrr::map(post, ~loo::extract_log_lik(.x,merge_chains = FALSE)),
+                r_eff = purrr::map(log_lik, ~loo::relative_eff(.x, cores=4))) %>%
+  dplyr::mutate(waic = purrr::map(log_lik, ~loo::waic(.x))) %>%
+  dplyr::mutate(loo = purrr::map2(log_lik, r_eff, ~ loo::loo(.x, r_eff = .y)))
+

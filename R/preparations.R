@@ -96,6 +96,8 @@ run_stan <- function(stan_data, iter=1000, warmup=500, chains=1, model =1){
     object <- stanmodels$bivariate_probit_mixed_onec_mo_nonc
   }else if(model == 2){
     object <- stanmodels$bivariate_probit_mixed_4
+  }else if(model == 3){
+    object <- stanmodels$bivariate_probit_mixed_4rhos
   }
 
   post <- rstan::sampling(object,

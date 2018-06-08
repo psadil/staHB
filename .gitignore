@@ -17,3 +17,5 @@ src/init.o
 man/*.Rd
 revdep/*
 inst/doc
+
+data/expt1*
