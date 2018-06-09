@@ -1,0 +1,256 @@
+Analysis of working memory experiment using state-trace
+========================================================
+
+
+
+```{r,echo=FALSE}
+
+rm(list=ls())
+
+# Data frame containing raw data, must be called "data"
+load("WMdata.RData") 
+# In this example data 0.1% non-resposnes and 
+#                      2.0% of responses < .2s and >3s removed
+
+
+# MAP FACTORS TO STANDARD NAMES (!! CHANGE THIS FOR YOUR DESIGN !!)
+
+names(data)[names(data)=="subjNumber"] <- "s"  # subjects
+names(data)[names(data)=="setSize"]    <- "T"  # Trace
+names(data)[names(data)=="silent"]     <- "D"  # Dimension
+names(data)[names(data)=="sequential"] <- "S"  # State
+names(data)[names(data)=="change"]     <- "R"  # Response
+names(data)[names(data)=="CResp"]      <- "C"  # Response score
+data <- data[,c("s","T","D","S","R","C")]
+
+# CHECK DATA IS IN THE RIGHT FORM
+
+if (!is.logical(data$C)) 
+  stop("Response score must be a logical")
+levs <- lapply(data[,c("s","T","D","S","R")],levels)
+not.fac <- unlist(lapply(levs,is.null))
+if (any(not.fac)) 
+  stop(paste("These columns are not factors:",
+             paste(names(not.fac)[not.fac],collapse=" ")))
+if (!(length(levs$S)==2)) 
+  stop("State factor must have 2 levels")
+
+cat(paste(length(levels(data$s)),"SUBJECTS with DESIGN LEVELS\n\n"))
+lapply(data[,c("T","D","S")],levels)
+
+# COUNT NUMBER OF CORRECT RESPONSES (M) AND TRIALS (N)
+
+corrects = tapply(data$C,list(s=data$s,T=data$T,D=data$D,S=data$S,R=data$R),sum)
+Ntotal = table(s=data$s,T=data$T,D=data$D,S=data$S,R=data$R)
+correctsDF = as.data.frame.table(corrects)
+NtotalDF = as.data.frame.table(Ntotal)
+if(  all(correctsDF[,1:5] == NtotalDF[,1:5]) ) { # Check factors are line up
+  correctsDF$N = NtotalDF$Freq
+  colnames(correctsDF)[6] = "M"
+} else {
+  stop("Could not merge data sets.")
+}
+
+
+# GET ACCURACY MEAN AND STANDARD ERROR ASSUMING A UNIFORM PRIOR
+
+correctsDF$phat = (correctsDF$M + 1) / (correctsDF$N + 2)
+correctsDF$stdErr = sqrt(correctsDF$phat * 
+                  (1 - correctsDF$phat) / (correctsDF$N + 2))
+
+
+# COMBINE DATA OVER TWO RESPONSE TYPES WIGHTED BY NUMBER OF TRIALS
+
+chg = correctsDF[correctsDF$R=="change",]
+sme = correctsDF[correctsDF$R=="same",]
+if(  all(sme[,1:4] == chg[,1:4]) ){ # Check factors line up
+  combinedDat = sme[,1:4] # subject and T, D, S factors
+  # weighted average
+  combinedDat$phat = (sme$N * sme$phat + chg$N * chg$phat) / (sme$N + chg$N)
+  combinedDat$stdErr = sqrt( sme$N^2 * sme$stdErr^2 + chg$N^2 * chg$stdErr^2 ) / 
+    (sme$N + chg$N)
+  smePrec = 1/(sme$stdErr/dnorm(qnorm(sme$phat)))^2
+  chgPrec = 1/(chg$stdErr/dnorm(qnorm(chg$phat)))^2
+
+  combinedDat$probitMean = (smePrec * qnorm(sme$phat) + chgPrec * qnorm(chg$phat)) / 
+    (smePrec + chgPrec)
+  combinedDat$probitStdErr = sqrt(1 / (smePrec + chgPrec))
+   
+  
+#  combinedDat$probitMean = (sme$N * qnorm(sme$phat) + chg$N * qnorm(chg$phat)) / 
+#    (sme$N + chg$N)
+#  combinedDat$probitStdErr = sqrt(sme$N^2 * (sme$stdErr/dnorm(qnorm(sme$phat)))^2 + 
+#                                  chg$N^2 * (chg$stdErr/dnorm(qnorm(chg$phat)))^2) / 
+#    (sme$N + chg$N)  
+
+} else {
+  stop("Could not merge same and change.")
+}
+
+cat("AVERAGE ACCURACY\n\n")
+round(tapply(combinedDat$phat,combinedDat[,c("T","D","S")],mean),2)
+
+# wm.av.p <- tapply(combinedDat$phat,combinedDat[,c("T","D","S")],mean)
+# save(wm.av.p,file="wm_av_p.RData")
+
+# PERFORM STATE TRACE ANALYSIS
+
+source('StateTraceLaplace.R')
+
+# CALCUALTE PRIOR AND POSTERIOR PROBABILITIES AND BAYES FACTORS
+
+
+# PREFERED ANALYSIS: PROBIT SCALE ABOVE CHANCE
+
+cat("CALCULATING BAYES FACTORS\n\n")
+
+ppp.probit.lower0 <- getPPP(dat=combinedDat,
+                     trace.increasing=FALSE,
+                     D.order=c("articulate","silent"),
+                     lower=0)
+bfs.p0 <- getBF(ppp.probit.lower0)
+
+## NB1: You can view the trace and dim restriciton subset using:
+# show.order(ppp.probit.lower0,"trace.dim")
+# Here is the full race subset with brief labels: 
+# show.order(ppp.probit.lower0,"trace",labels=c("2a","4a","8a","2s","4s","8s"))
+## NB2: You can run getPPP with use.sampling = TRUE and set the number of 
+##      samples with M and nrep paramters to check Laplace but it is very slow
+##      Prince et al.'s StateTrace package implements more efficient sampling
+##      but even that is still quite slow.
+
+# # !! UNCOMMENT TO COMAPRE TO PREFERED ANALYSIS
+#
+# # PROBIT SCALE NO RESTRICTIONS
+# ppp.probit <- getPPP(dat=combinedDat,
+#                      trace.increasing=FALSE,
+#                      D.order=c("articulate","silent"))
+# bfs.p <- getBF(ppp.probit)
+
+# # BINOMIAL SCALE
+# ppp.binom <- getPPP(combinedDat,probit=FALSE,trace.increasing=FALSE,
+#                     D.order=c("articulate","silent"))
+# bfs.b <- getBF(ppp.binom)
+# 
+# # BINOMIAL SCALE ABOVE CHANCE
+# ppp.binom.lower0 <- getPPP(combinedDat,probit=FALSE,lower=0.5,
+#                     trace.increasing=FALSE,
+#                     D.order=c("articulate","silent"))
+# bfs.b0 <- getBF(ppp.binom.lower0)
+# 
+# # COMPARE RESULTS AMONG THE 4 METHODS
+# 
+# compareBFs <- function(bf1,bf2,digits=3) 
+# # Average % difference in mono vs. non-mono
+# {
+#   avpct <- function(type)
+#     mean(200*(bf1[[type]]$m.nm-bf2[[type]]$m.nm)/
+#              (bf1[[type]]$m.nm+bf2[[type]]$m.nm))
+#   list(BF0=round(avpct("BF0"),digits),
+#        BF1=round(avpct("BF1"),digits),
+#        BF2=round(avpct("BF2"),digits))  
+# }
+# 
+# compareBFs(bfs.p,bfs.p0,2) # Lower bound has little effect as good performance
+# 
+# compareBFs(bfs.b,bfs.b0)  # Same small differnce on binomial scale 
+# 
+# compareBFs(bfs.b,bfs.p,1) # Probit makes some difference 
+
+
+# CHOOSE PREFERED METHOD
+
+bfs <- bfs.p0 
+ppp <- ppp.probit.lower0
+```
+
+
+```{r fig.width=9, fig.height=7, echo=FALSE}
+# COMAPRE BAYES FACTORS, FIGURE 3 IN PAPER
+
+plot.order <- order(bfs$BF1$m.nm)
+nams <- dimnames(ppp$prior)[[1]] # Original names
+nams <- nams[plot.order]
+names(nams) <- letters[1:15]
+nams
+cex=1.5
+par(mar= c(5, 5, 4, 2) + 0.1)
+plot(1:15,bfs$BF1$m.nm[plot.order],ylim=c(-0.5,6.9),pch=1,cex=cex,
+     xaxt="n",xlab="Participants",ylab=expression(paste(log[10],"(BF)")))
+axis(1,1:15,letters[1:15])
+lines(1:15,bfs$BF1$m.nm[plot.order])
+points(1:15,bfs$BF0$m.nm[plot.order],pch=2,cex=cex)
+lines(1:15,bfs$BF0$m.nm[plot.order])
+points(1:15,bfs$BF1$t.nt[plot.order],pch=8,cex=cex)
+lines(1:15,bfs$BF1$t.nt[plot.order])
+abline(h=0)          # > = monotonic
+abline(h=log10(3),lty=3)   # > = positive
+abline(h=log10(20),lty=3)  # > = strong
+abline(h=log10(150),lty=3) # > = very strong
+points(1:15,bfs$BF2$m.nm[plot.order],pch=16,cex=cex)
+lines(1:15,bfs$BF2$m.nm[plot.order])
+legend("top",c("T vs. NT","M vs. NM","M vs. NM | T","M vs. NM | T & D"),
+  pch=c(8,2,1,16),lty=1,horiz=T,bty="n",cex=.7)
+par(mar= c(5, 4, 4, 2) + 0.1)
+```
+
+
+
+```{r fig.width=9, fig.height=7, echo=FALSE}
+# PLOT TWO SELECTED SUBJECTS, FIGURE 2 IN PAPER
+plot.order <- order(bfs$BF1$m.nm)
+nams <- dimnames(ppp$prior)[[1]] # Original names
+nams <- nams[plot.order]
+names(nams) <- letters[1:15]
+par(mfrow=c(2,3))
+cex=1.5; cex1=1; cex2=1
+plot.st(dat=combinedDat[combinedDat$s==nams["a"],],
+        main="Participant a \n Unrestricted",cex=cex,
+        probit=TRUE,ylim=c(.5,1),xlim=c(.5,1),
+        trace.increasing=NULL,D.order=NULL,lower=0,
+        xlab="Sequential",ylab="Simultaneous")
+legend("top",legend=c("Articulate","Silent"),lty=1:2,bty="n",cex=cex1)
+BFS <- c(BF=round(as.numeric(10^bfs$BF0$m.nm[nams["a"]]),1))
+legend("bottom",paste(names(BFS),round(BFS,1),sep=" = "),bty="n",cex=cex2)
+plot.st(dat=combinedDat[combinedDat$s==nams["a"],],
+        main="Participant a \n  Trace",cex=cex,
+        probit=TRUE,ylim=c(.5,1),xlim=c(.5,1),
+        trace.increasing=FALSE,D.order=NULL,lower=0,
+        xlab="Sequential",ylab="Simultaneous")
+legend("top",legend=c("Articulate","Silent"),lty=1:2,bty="n",cex=cex1)
+BFS <- c(BF=round(as.numeric(10^bfs$BF1$m.nm[nams["a"]]),1))
+legend("bottom",paste(names(BFS),round(BFS,1),sep=" = "),bty="n",cex=cex2)
+plot.st(dat=combinedDat[combinedDat$s==nams["a"],],
+        main="Participant a \n Trace + Dimension",cex=cex,
+        probit=TRUE,ylim=c(.5,1),xlim=c(.5,1),
+        trace.increasing=FALSE,D.order=c("articulate","silent"),lower=0,
+        xlab="Sequential",ylab="Simultaneous")
+legend("top",legend=c("Articulate","Silent"),lty=1:2,bty="n",cex=cex1)
+BFS=c(BF=round(as.numeric(10^bfs$BF2$m.nm[nams["a"]]),1))
+legend("bottom",paste(names(BFS),round(BFS,1),sep=" = "),bty="n",cex=cex2)
+plot.st(dat=combinedDat[combinedDat$s==nams["o"],],
+        main="Participant o \n Unrestricted",cex=cex,
+        probit=TRUE,ylim=c(.5,1),xlim=c(.5,1),
+        trace.increasing=NULL,D.order=NULL,lower=0,
+        xlab="Sequential",ylab="Simultaneous")
+legend("top",legend=c("Articulate","Silent"),lty=1:2,bty="n",cex=cex1)
+BFS <- c(BF=round(as.numeric(10^bfs$BF0$m.nm[nams["o"]]),1))
+legend("bottom",paste(names(BFS),round(BFS,1),sep=" = "),bty="n",cex=cex2)
+plot.st(dat=combinedDat[combinedDat$s==nams["o"],],
+        main="Participant o \n  Trace",cex=cex,
+        probit=TRUE,ylim=c(.5,1),xlim=c(.5,1),
+        trace.increasing=FALSE,D.order=NULL,lower=0,
+        xlab="Sequential",ylab="Simultaneous")
+legend("top",legend=c("Articulate","Silent"),lty=1:2,bty="n",cex=cex1)
+BFS <- c(BF=round(as.numeric(10^bfs$BF1$m.nm[nams["o"]]),1))
+legend("bottom",paste(names(BFS),round(BFS,1),sep=" = "),bty="n",cex=cex2)
+plot.st(dat=combinedDat[combinedDat$s==nams["o"],],
+        main="Participant o \n Trace + Dimension",cex=cex,
+        probit=TRUE,ylim=c(.5,1),xlim=c(.5,1),
+        trace.increasing=FALSE,D.order=c("articulate","silent"),lower=0,
+        xlab="Sequential",ylab="Simultaneous")
+legend("top",legend=c("Articulate","Silent"),lty=1:2,bty="n",cex=cex1)
+BFS=c(BF=round(as.numeric(10^bfs$BF2$m.nm[nams["o"]]),1))
+legend("bottom",paste(names(BFS),round(BFS,1),sep=" = "),bty="n",cex=cex2)
+```
+
