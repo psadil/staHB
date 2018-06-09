@@ -1,4 +1,4 @@
-library(magrittr)
+library(magrittrm )
 
 delay <- readr::read_table2("https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/Data%20files/delay.dat",
                             col_names = c("participant", "group", "dv", "condition_1", "condition_2", "condition_3", "condition_4")) %>%
