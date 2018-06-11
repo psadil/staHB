@@ -3,7 +3,7 @@ setup_cart <- function(jobs = 1, parallelism = drake::default_parallelism(), n_c
                       type_model = "full", reps = 1, n_condition_rho = 3,
                       n_subject = 1, n_item = 1, condition_x = c(-1, .7, -1/4, 1), condition_y = c(-1, -1/3, 1, 2/3 ),
                       subject_scale = 0, item_scale = 0, tau = 1,
-                      iter = 500, warmup = 1000){
+                      iter = 500, warmup = 1000, cache_dir = NULL){
 
 
   wf_data <- drake::drake_plan(data = gen_dataset_cart(n_item = N__ITEM,
@@ -54,9 +54,9 @@ setup_cart <- function(jobs = 1, parallelism = drake::default_parallelism(), n_c
   wf_plan <- rbind(wf_data, wf_apply_type, wf_stan_data, stan_data_reduce,
                    typed_reduce, wf_stan, wf_waic, reduce_waic, assemble_d)
 
-  con <- drake::drake_config(wf_plan)
+  con <- drake::drake_config(wf_plan, cache = cache_dir)
 
-  drake::make(wf_plan, jobs = jobs, parallelism = parallelism)
+  drake::make(wf_plan, jobs = jobs, parallelism = parallelism, cache = cache_dir)
 
   return(NULL)
 }
