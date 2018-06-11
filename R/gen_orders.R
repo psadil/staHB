@@ -34,34 +34,21 @@ gen_X_one_order <- function(X1,X2){
 gen_X <- function(d, type, n_conditions=3, degree="min"){
   # this is the main function for generating order-dependent design matrices
 
-  if (n_conditions == 3){
-    order_X <- gen_orders(n_conditions) %>%
-      trim_orders(., degree = degree, base_group = 1, end_group = n_conditions)
-  }else if(n_conditions == 4){
-    order_X <- gen_orders(n_conditions) %>%
-      trim_orders(., degree = "max", base_group = 1, end_group = n_conditions)
+  order_X <- gen_orders(n_conditions) %>%
+    trim_orders(., degree = degree, base_group = 1, end_group = n_conditions)
+
+  XX <- array(dim = c(nrow(order_X)^2, n_conditions, 2))
+  perms <- gtools::permutations(n=6, r=2, v=1:6, repeats.allowed = TRUE)
+  for(i in 1:nrow(XX)){
+    XX[i,,1:2] <- abind::abind(order_X[perms[i,1],], order_X[perms[i,2],], along = 3)
   }
 
   if (type=="full"){
-    if(n_conditions == 4){
-      order_X <- abind::abind(order_X, order_X, along=1) %>%
-        abind::abind(., .[c(1,2,4,3),], along=3)
-    }else if(n_conditions == 3){
-      order_X <- abind::abind(order_X, order_X, along=1) %>%
-        abind::abind(., .[c(1,2,4,3),], along=3)
-    }
+    order_X <- XX
   }else if(type=="mon"){
-    if(n_conditions == 4){
-      order_X <- abind::abind(order_X, order_X, along=3)
-    }else if(n_conditions == 3){
-      order_X <- abind::abind(order_X, order_X, along=3)
-    }
+    order_X <- XX[rowSums( XX[,,1] == XX[,,2]) == n_conditions,,]
   }else if(type == "nmon"){
-    if(n_conditions == 4){
-      order_X <- abind::abind(order_X, order_X[c(2,1),], along=3)
-    }else if(n_conditions == 3){
-      order_X <- abind::abind(order_X, order_X[c(2,1),], along=3)
-    }
+    order_X <- XX[rowSums( XX[,,1] != XX[,,2]) == n_conditions,,]
   }
 
   # careful! the default coding scheme for ordered factor is polynomial contrasts!
