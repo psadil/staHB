@@ -14,20 +14,117 @@ knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>"
 )
+
+library(rJava)
+library(magic)
+library(tidyverse)
+
+
+```
+
+Note that the following is a very hacky way to source this code. 
+
+```{r}
+
+# staCMRsetup
+# sources STACMR functions, loads required packages, and links to java runtime library
+# execute this program before doing anything else
+bookinfo = 'Dunn, J. C. & Kalish, M. L. (2018). State-Trace Analysis. Springer.'
+cat ('STACMR program library Version 21.02.2018\n')
+cat ('Utility programs for use with the book:\n')
+cat (paste0(bookinfo,'\n\n'))
+source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/staSTATS.R')
+source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/staPLOT.R')
+source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/staMR.R')
+source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/staMRFIT.R')
+source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/staCMR.R')
+source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/staCMRFIT.R')
+source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/staPLOTBN.R')
+source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/staMRBN.R')
+source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/staCMRBN.R')
+source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/staCMRFITBN.R')
+source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/staMRFITBN.R')
+source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/staCMRFITBN.R')
+
+source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/Utility%20functions/staCMRx.R')
+source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/Utility%20functions/gen2list.R')
+source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/Utility%20functions/list2adj.R')
+source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/Utility%20functions/adj2list.R')
+source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/Utility%20functions/shrinkDiag.R')
+source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/Utility%20functions/gen2listBN.R')
+source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/Utility%20functions/staSTATSBN.R')
+source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/Utility%20functions/BNframe2list.R')
+source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/Utility%20functions/binSTATS.R')
+source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/Utility%20functions/tiesort.R')
+source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/Utility%20functions/LoftusMasson.R')
+
+source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/java/jMR.R')
+source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/java/jMRfits.R')
+source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/java/jMRBNfits.R')
+source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/java/jCMRxBNfits.R')
+source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/java/jCMRx.R')
+source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/java/jCMRBN.R')
+source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/java/jCMRfitsx.R')
+source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/java/jCMRBN.R')
+
+
+.jpackage(pkgname, lib.loc = libname)
+j = list.files(path= file.path(devtools::package_file(), 'inst','java'), pattern = ".jar$");
+if (length(j)==0) {print("Error: Java runtime library not found")
+} else {
+  j=sort(j,decreasing=T); vm=file.path(devtools::package_file(), 'inst','java', j[1])
+  .jinit (classpath=vm) # initialize java VM
+}
+
+```
+
+
+```{r}
+
+d <- tibble(condition_rho = c(0, .75, -.75)) %>%
+  crossing(tau = 1,
+           subject_scale = 0,
+           n_subject = c(50, 200),
+           n_item = 25) %>%
+  mutate(expt = 1:n(),
+         d = pmap(list(n_subject = n_subject, n_item = n_item, item_scale = .1, subject_scale = .1,
+                       condition_rho = condition_rho, tau = tau), gen_dataset_cart ),
+         cmr_d = map(d, to_cmr)) 
+
+  
 ```
 
 ```{r}
 
-d <- gen_dataset_cart(10000, 1, 4, 
-                      condition_x = c(-1, .7, -1/4, 1), condition_y = c(-1, -1/3, 1, 2/3 ), 
-                      condition_rho = 0, subject_scale = 0, item_scale = 0, tau = .2)
-
-```
-
-```{r}
-d %>% 
-  ggplot(aes(x = evidence_x, y = evidence_y, color = condition)) + 
+d %>% unnest(cmr_d) %>%
+  gather(condition, value, c("1","2","3","4")) %>%
+  spread(question, value) %>%
+  ggplot(aes(x = `1`, y = `2`, color = condition )) +
+  facet_grid(n_subject ~ condition_rho, labeller = label_both) +
   stat_ellipse() +
-  coord_fixed()
+  coord_fixed() +
+  theme_classic() +
+  geom_point(alpha = .1)
+  
+
+
 ```
+
+
+
+```{r}
+
+for(exp in unique(d$expt)){
+  tmp <- d$cmr_d[[exp]] %>% as.data.frame()
+  out <- staCMR(tmp)
+  p <- staPLOT2(tmp, 
+           grouplabels = list( glue::glue('Correlation: {as.character(d$condition_rho[exp])} \n n_sub = {as.character(d$n_subject[exp])}' ) ), 
+           pred = out$x,
+           xlim = c(-1.5,1.5),
+           ylim = c(-1.5,1.5))
+}
+
+```
+
+
 

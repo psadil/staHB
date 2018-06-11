@@ -41,8 +41,8 @@ gen_dataset <- function(n_item, n_subject, n_condition = 3,
 }
 
 #' @export
-gen_dataset_cart <- function(n_item, n_subject, n_condition = 4, condition_x, condition_y,
-                             condition_rho, subject_scale = sqrt(.1), item_scale = sqrt(.1), subject_rho = 0, item_rho = 0,
+gen_dataset_cart <- function(n_item = 20, n_subject = 1, n_condition = 4, condition_x = c(-1, .7, -1/4, 1), condition_y = c(-1, -1/3, 1, 2/3 ),
+                             condition_rho = 0, subject_scale = 0, item_scale = 0, subject_rho = 0, item_rho = 0,
                              tau = 1){
 
   # range between condition effects. used in determining std of item effects
