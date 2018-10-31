@@ -68,11 +68,12 @@ source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/jav
 source ('https://raw.githubusercontent.com/michaelkalish/STA/master/STACMR-R/java/jCMRBN.R')
 
 
-.jpackage(pkgname, lib.loc = libname)
-j = list.files(path= file.path(devtools::package_file(), 'inst','java'), pattern = ".jar$");
+jar <- download.file('https://github.com/michaelkalish/STA/raw/master/STACMR-R/java/fxMR-0.3.40.jar',
+                     tempfile("fxMR-0.3.40", fileext = ".jar"))
+j = list.files(path=tempdir(),pattern = ".jar$")
 if (length(j)==0) {print("Error: Java runtime library not found")
 } else {
-  j=sort(j,decreasing=T); vm=file.path(devtools::package_file(), 'inst','java', j[1])
+  j=sort(j,decreasing=T); vm=file.path(tempdir(), j[1])
   .jinit (classpath=vm) # initialize java VM
 }
 
@@ -83,11 +84,12 @@ if (length(j)==0) {print("Error: Java runtime library not found")
 
 d <- tibble(condition_rho = c(0, .75, -.75)) %>%
   crossing(tau = 1,
-           subject_scale = 0,
+           subject_scale = .1,
+           item_scale = .1,
            n_subject = c(50, 200),
            n_item = 25) %>%
   mutate(expt = 1:n(),
-         d = pmap(list(n_subject = n_subject, n_item = n_item, item_scale = .1, subject_scale = .1,
+         d = pmap(list(n_subject = n_subject, n_item = n_item, item_scale = item_scale, subject_scale = subject_scale,
                        condition_rho = condition_rho, tau = tau), gen_dataset_cart ),
          cmr_d = map(d, to_cmr)) 
 
@@ -103,8 +105,13 @@ d %>% unnest(cmr_d) %>%
   facet_grid(n_subject ~ condition_rho, labeller = label_both) +
   stat_ellipse() +
   coord_fixed() +
+  scale_x_continuous(labels = NULL, name = "DV1") +
+  scale_y_continuous(labels = NULL, name = "DV2") +
   theme_classic() +
-  geom_point(alpha = .1)
+  theme(axis.ticks = element_blank(),
+        strip.background = element_blank()) +
+  geom_point(alpha = .1) +
+  ggsave("data_bivariate.png")
   
 
 
@@ -122,9 +129,28 @@ for(exp in unique(d$expt)){
            pred = out$x,
            xlim = c(-1.5,1.5),
            ylim = c(-1.5,1.5))
+  p + scale_x_continuous(labels = NULL, name = "DV1") +
+    scale_y_continuous(labels = NULL, name = "DV2") +
+    theme(axis.ticks = element_blank(),
+          strip.background = element_blank())
+  
+  ggsave(glue::glue("cmr{exp}.png"))
 }
 
 ```
 
+```{r}
 
+d2 <- d %>%
+  mutate(cmrfit = map(cmr_d, ~staCMRFIT(.x %>% as.data.frame(), nsample = 10000)))
+
+
+```
+
+```{r}
+
+d2 %>% mutate(p = map_dbl(cmrfit, ~magrittr::extract2(.x, "p"))) %>%
+  select(condition_rho, n_subject, n_item, p)
+
+```
 
